@@ -1,0 +1,8 @@
+name: asap
+generic:
+  seed: 42
+data:
+  dataset_path: "data/asap/dataset"
+  csv_path: "data/asap/metadata.csv"
+  shuffle: False
+  dataset_split: [.8, .1, .1]
