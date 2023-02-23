@@ -1,2 +1,4 @@
 *.pyc
 dataset/
+data/*/vocab
+log

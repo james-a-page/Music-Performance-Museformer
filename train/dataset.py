@@ -1,19 +1,26 @@
 import os
+import pickle
 
 import pandas as pd
 import numpy as np
 
 from remi_edit import REMI
-from MusicXMLAnnotations.src import genannotations
+from musicxmlannotations import genannotations
+from miditok import Event
+from utils import generate_tokens
 
+import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data.sampler import SubsetRandomSampler
 
 
 class ASAPDataset(Dataset):
     def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX):
         self.dataset_path = data_cfg.get("dataset_path")
         self.csv_path = data_cfg.get("csv_path")
+        self.new_tokens_dir = data_cfg.get("new_tokens_dir")
+
         self.SOS_IDX = SOS_IDX
         self.EOS_IDX = EOS_IDX
 
@@ -21,32 +28,60 @@ class ASAPDataset(Dataset):
         self.tokenizer, bad_xmls = self._build_tokenizer(tokenizer)
 
         # Build data
-        self.data = pd.read_csv(os.path.join(self.dataset_path, self.csv_path))
+        self.data = pd.read_csv(self.csv_path)
         self.data = self.data[['xml_score', 'midi_score', 'midi_performance']]
         self.data = self.data.drop(bad_xmls)
+
+
+    def _load_tokenizer(self, tokenizer):
+        with open(os.path.join(self.new_tokens_dir, "new_tokens.pickle"), "rb") as f:
+                new_instructions = pickle.load(f)
+
+        for i in new_instructions:
+            tokenizer.vocab.add_event(Event("Instruction", i, time=0, desc="Instruct_"+i))
+
+        with open(os.path.join(self.new_tokens_dir, "bad_xmls.pickle"), "rb") as f:
+            bad_xmls = pickle.load(f)
+
+        return tokenizer, bad_xmls
 
 
     def _build_tokenizer(self, tokenizer):
         """
         Adds all instruction tokens, found in any example
         """
-        all_xml = pd.read_csv(os.path.join(self.dataset_path, self.csv_path))['xml_score'].tolist()
+        # Load from previous generation
+        if os.path.exists(self.new_tokens_dir):
+            return self._load_tokenizer(tokenizer)
+        else:
+            os.mkdir(self.new_tokens_dir)
 
-        bad_xmls = list()
-        for idx, i in enumerate(all_xml):
-            path = os.path.join('asap-dataset', i)
-            try:
-                instructions = genannotations.main(path, time=True, verbose=False)
-            except (KeyError, IndexError) as _:
-                bad_xmls.append(idx)
-                continue
+            all_xml = pd.read_csv(self.csv_path)['xml_score'].tolist()
 
-            # If we have instructions, add to tokenizer vocab
-            for _, j in instructions:
-                if j not in tokenizer.vocab._event_to_token:
-                    tokenizer.vocab.add_event(Event("Instruction", j, time=0, desc="Instruct_"+j))
-        
-        return tokenizer, bad_xmls
+            bad_xmls = list()
+            new_instructions = list()
+            for idx, i in enumerate(all_xml):
+                path = os.path.join(self.dataset_path, i)
+                try:
+                    instructions = genannotations.main(path, time=True, verbose=False)
+                except (KeyError, IndexError) as _:
+                    bad_xmls.append(idx)
+                    continue
+
+                # If we have instructions, add to tokenizer vocab
+                for _, j in instructions:
+                    if j not in new_instructions and j != '':
+                        tokenizer.vocab.add_event(Event("Instruction", j, time=0, desc="Instruct_"+j))
+                        new_instructions.append(j)
+
+            # Dump to file
+            with open(os.path.join(self.new_tokens_dir, "new_tokens.pickle"), "wb+") as f:
+                pickle.dump(new_instructions, f)
+
+            with open(os.path.join(self.new_tokens_dir, "bad_xmls.pickle"), "wb+") as f:
+                pickle.dump(bad_xmls, f)
+            
+            return tokenizer, bad_xmls
 
 
     def _buildtokenizer_whitelist(self, tokenizer):
@@ -65,11 +100,11 @@ class ASAPDataset(Dataset):
         xml, midi, midi_y = self.data.iloc[idx]
 
         instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
-        tokens = generate_tokens(tokenizer, os.path.join(self.dataset_path, midi), instructions)
-        tokens = [self.SOS_IDX] + tokens + [self.EOS_IDX]
+        tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
+        tokens = torch.tensor([self.SOS_IDX] + tokens + [self.EOS_IDX])
 
-        target_tokens = generate_tokens(tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
-        target_tokens = [self.SOS_IDX] + target_tokens + [self.EOS_IDX]
+        target_tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
+        target_tokens = torch.tensor([self.SOS_IDX] + target_tokens + [self.EOS_IDX])
 
         return tokens, target_tokens
 
@@ -122,7 +157,7 @@ def build_tokenizer(data_cfg: dict):
 def load_data(data_cfg: dict):
     tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = build_tokenizer(data_cfg)
 
-    dataset = ASAPDataset(data_cfg, tokenizer, SOS_TOKEN, EOS_TOKEN)
+    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX)
 
     # Create splits
     indices = list(range(len(dataset)))

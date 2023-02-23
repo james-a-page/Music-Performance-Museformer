@@ -1,8 +1,23 @@
 name: asap
 generic:
   seed: 42
+  log_dir: './log/'
+  clear_log: True
 data:
   dataset_path: "data/asap/dataset"
-  csv_path: "data/asap/metadata.csv"
+  csv_path: "data/asap/dataset/metadata.csv"
+  new_tokens_dir: "data/asap/vocab"
   shuffle: False
   dataset_split: [.8, .1, .1]
+  batch_size: 6
+encoder:
+  input_size: 512
+  hidden_size: 512
+  lr: 1e-4
+decoder:
+  output_size: 512
+  hidden_size: 512
+  lr: 1e-4
+training:
+  epochs: 1
+  max_length: 5000

@@ -2,6 +2,8 @@ from typing import List, Tuple, Dict
 import collections
 import random
 
+import yaml
+
 from remi_edit import REMI
 from miditok import Vocabulary, Event
 from miditoolkit import MidiFile
@@ -24,6 +26,18 @@ def set_seed(seed: int):
     random.seed(seed)
 
 
+def load_config(path="configs/default.yaml") -> dict:
+    """
+    Loads and parses a YAML configuration file.
+
+    path: path to YAML configuration file
+    return: configuration dictionary
+    """
+    with open(path, "r", encoding="utf-8") as ymlfile:
+        cfg = yaml.load(ymlfile, Loader=yaml.Loader)
+    return cfg
+
+
 def generate_tokens(
         tokenizer,
         midi_path: str,
@@ -34,9 +48,10 @@ def generate_tokens(
     midi = MidiFile(midi_path)
 
     all_instructions = set([instruction for (_, instruction) in instructions])
+    """
     for instruction in all_instructions:
         if instruction not in tokenizer.vocab._event_to_token:
-            tokenizer.vocab.add_event(Event("Instruction", instruction, time=0, desc="Instruct_"+instruction))
+            tokenizer.vocab.add_event(Event("Instruction", instruction, time=0, desc="Instruct_"+instruction))"""
 
     instruct_timeline = generate_instructions_timeline(
         instruction_list=instructions, tokenizer=tokenizer)
@@ -72,7 +87,8 @@ def generate_instructions_timeline(
 
     timeline = collections.defaultdict(list)
     for a, b in instruction_list:
-        timeline[a].extend(tokenizer.events_to_tokens([b]))
+        if b.value != '':
+            timeline[a].extend(tokenizer.events_to_tokens([b]))
     return dict(timeline)
 
 

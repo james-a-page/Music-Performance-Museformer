@@ -1,10 +1,14 @@
 import os
 import argparse
+import shutil
 
 from dataset import load_data
-from utils import set_seed
+from utils import set_seed, load_config
+from model import EncoderRNN, DecoderRNN
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
+from einops import rearrange
 
 
 def train(cfg_file):
@@ -12,14 +16,70 @@ def train(cfg_file):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: ', device)
 
+    log_dir = cfg["generic"].get("log_dir")
+    if cfg['generic'].get('clear_log') and os.path.exists(log_dir):
+        shutil.rmtree(log_dir)
+    writer = SummaryWriter(log_dir=log_dir)
+
     # Set the random seed
     set_seed(seed=cfg["generic"].get("seed"))
 
     train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
+    encoder = EncoderRNN(cfg["encoder"], len(tokenizer.vocab), device).to(device)
+    decoder = DecoderRNN(cfg["decoder"], len(tokenizer.vocab), device).to(device)
+
+    # Optimizer
+    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=float(cfg["encoder"].get("lr")))
+    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=float(cfg["decoder"].get("lr")))
+    criterion = torch.nn.NLLLoss(ignore_index=PAD_IDX)
+
+    epochs = cfg["training"].get("epochs")
+    max_length = cfg["training"].get("max_length")
+    batch_size = cfg["data"].get("batch_size")
+
+    for epoch in range(epochs):
+        encoder.train()
+        decoder.train()
+        for batch_idx, batch in enumerate(train_loader):
+            tokens, tokens_pred = batch
+            input_length = tokens.shape[1]
+            target_length = tokens_pred.shape[1]
+
+            loss = 0
+            encoder_optimizer.zero_grad()
+            decoder_optimizer.zero_grad()
+
+            # Encode input
+            encoder_hidden = encoder(tokens.to(device).cuda())
+
+            decoder_input = torch.full((batch_size, 1), SOS_IDX, device=device).cuda()
+            decoder_hidden = encoder_hidden.cuda()
+
+            # Decoding, teacher forcing
+            cum_loss = 0
+            for idx in range(target_length):
+                decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+                decoder_output = decoder_output[:, 0, :]
+                decoder_input = tokens_pred[:, idx].unsqueeze(1).cuda()
+
+                l = criterion(decoder_output.cpu(), tokens_pred[:, idx])
+                loss += l
+                cum_loss += l
+                
+            avg_loss = cum_loss / target_length
+
+            loss.backward()
+            encoder_optimizer.step()
+            decoder_optimizer.step()
+
+            # Tensorboard
+            global_step = epoch*len(train_loader) + batch_idx
+            writer.add_scalar('Loss/train', avg_loss, global_step)
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("AHAHAAH")
+    parser = argparse.ArgumentParser("ttttt")
     parser.add_argument(
         "config",
         default="configs/asap.yaml",
