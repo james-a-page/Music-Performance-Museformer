@@ -12,6 +12,5 @@
 
 ## Execute your program(s) ##
 . /etc/profile.d/modules.sh
-module load CUDA
 
 srun --nodelist="falcon-04" python3 -m pipenv run python ./train/train.py configs/asap.yaml

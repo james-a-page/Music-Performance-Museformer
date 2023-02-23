@@ -43,6 +43,8 @@ def train(cfg_file):
         decoder.train()
         for batch_idx, batch in enumerate(train_loader):
             tokens, tokens_pred = batch
+
+            this_batch_size = tokens.shape[0]
             input_length = tokens.shape[1]
             target_length = tokens_pred.shape[1]
 
@@ -53,7 +55,7 @@ def train(cfg_file):
             # Encode input
             encoder_hidden = encoder(tokens.to(device).cuda())
 
-            decoder_input = torch.full((batch_size, 1), SOS_IDX, device=device).cuda()
+            decoder_input = torch.full((this_batch_size, 1), SOS_IDX, device=device).cuda()
             decoder_hidden = encoder_hidden.cuda()
 
             # Decoding, teacher forcing
