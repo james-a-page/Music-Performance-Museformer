@@ -36,6 +36,13 @@ class DecoderRNN(nn.Module):
 
         output, hidden = self.gru(embedding, hidden)
         output = self.out(output)
-        output = self.softmax(output)
         
         return output, hidden
+
+
+class DecoderATTN(nn.Module):
+    def __init__(self):
+        pass
+    
+    def forward(self, x):
+        pass

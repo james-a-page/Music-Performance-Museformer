@@ -13,4 +13,4 @@
 ## Execute your program(s) ##
 . /etc/profile.d/modules.sh
 
-srun --nodelist="falcon-04" python3 -m pipenv run python ./train/train.py configs/asap.yaml
+srun --nodelist="falcon-05" python3 -m pipenv run python ./train/train.py configs/asap.yaml

@@ -15,7 +15,6 @@ encoder:
   hidden_size: 512
   lr: 1e-4
 decoder:
-  output_size: 512
   hidden_size: 512
   lr: 1e-4
 training:

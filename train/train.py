@@ -3,7 +3,7 @@ import argparse
 import shutil
 
 from dataset import load_data
-from utils import set_seed, load_config
+from utils import set_seed, load_config, greedy_decode
 from model import EncoderRNN, DecoderRNN
 
 import torch
@@ -32,13 +32,16 @@ def train(cfg_file):
     # Optimizer
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=float(cfg["encoder"].get("lr")))
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=float(cfg["decoder"].get("lr")))
-    criterion = torch.nn.NLLLoss(ignore_index=PAD_IDX)
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     epochs = cfg["training"].get("epochs")
     max_length = cfg["training"].get("max_length")
     batch_size = cfg["data"].get("batch_size")
 
+    print(len(train_loader))
+
     for epoch in range(epochs):
+        print(epoch)
         encoder.train()
         decoder.train()
         for batch_idx, batch in enumerate(train_loader):
@@ -78,6 +81,42 @@ def train(cfg_file):
             # Tensorboard
             global_step = epoch*len(train_loader) + batch_idx
             writer.add_scalar('Loss/train', avg_loss, global_step)
+
+        # Greedily decode last example
+        decoded_tokens = greedy_decode(encoder, decoder, tokens[0], EOS_IDX, SOS_IDX, device)
+        print(decoded_tokens)
+
+        # Val
+        val_loss = 0
+        encoder.eval()
+        decoder.eval()
+        for batch_idx, batch in enumerate(val_loader):
+            tokens, tokens_pred = batch
+
+            this_batch_size = tokens.shape[0]
+            input_length = tokens.shape[1]
+            target_length = tokens_pred.shape[1]
+
+            # Encode input
+            with torch.no_grad():
+                encoder_hidden = encoder(tokens.to(device).cuda())
+
+                decoder_input = torch.full((this_batch_size, 1), SOS_IDX, device=device).cuda()
+                decoder_hidden = encoder_hidden.cuda()
+
+                # Decoding, teacher forcing
+                cum_loss = 0
+                for idx in range(target_length):
+                    decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+                    decoder_output = decoder_output[:, 0, :]
+                    decoder_input = tokens_pred[:, idx].unsqueeze(1).cuda()
+
+                    l = criterion(decoder_output.cpu(), tokens_pred[:, idx])
+                    cum_loss += l
+                val_loss += cum_loss / target_length
+
+        val_loss /= len(val_loader)
+        writer.add_scalar('Loss/val', val_loss, global_step)
 
 
 if __name__ == "__main__":
