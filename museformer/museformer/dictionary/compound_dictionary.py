@@ -2,7 +2,6 @@ import re
 
 from fairseq.data import Dictionary
 
-
 class CompoundDictionary(Dictionary):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -12,7 +11,7 @@ class CompoundDictionary(Dictionary):
 
     @classmethod
     def load(cls, f):
-        d = cls(bos='', pad='', eos='')
+        d = cls(bos='1', pad='0', eos='2')
         d.add_from_file(f)
         d.construct_types()
         return d
