@@ -12,7 +12,7 @@ class CompoundDictionary(Dictionary):
 
     @classmethod
     def load(cls, f):
-        d = cls()
+        d = cls(bos='', pad='', eos='')
         d.add_from_file(f)
         d.construct_types()
         return d
