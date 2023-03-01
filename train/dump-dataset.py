@@ -50,7 +50,12 @@ def dump_tokens(split, data):
     print(f"Done")
 
 def dump_vocab_dict(tokenizer):
-    pass
+    vocab = tokenizer.vocab
+    with open('./museformer/data/meta/our_dict.txt', 'w') as dict_f:
+        for tok in list(vocab.event_to_token.values()):
+            dict_f.write(str(tok) + ' 1\n')
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -62,5 +67,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
     dump_dataset(cfg_file=args.config)

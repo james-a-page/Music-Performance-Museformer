@@ -55,7 +55,7 @@ class MuseformerLanguageModelingTask(LanguageModelingTask):
         super(MuseformerLanguageModelingTask, cls).add_args(parser)
 
         # Basic
-        parser.add_argument('--eob-token', default='b-1')
+        parser.add_argument('--eob-token', default='4')
         parser.add_argument('--eoc-token', type=arg_tools.str_to_type_with_specific_word_as_none(str, 'None'),
                             default='e-1')
 

@@ -8,7 +8,7 @@ UPDATE_FREQ=1
 PEAK_LR=5e-4            # Peak learning rate, adjust as needed
 WARMUP_UPDATES=16000     # Warmup the learning rate over this many updates
 
-OMP_NUM_THREADS=$(cat /proc/cpuinfo| grep "processor"| wc -l)
+OMP_NUM_THREADS=8
 
 ulimit -n 4096
 
