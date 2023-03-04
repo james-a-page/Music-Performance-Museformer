@@ -21,7 +21,7 @@ def dump_dataset(cfg_file):
 
     dump_vocab_dict(tokenizer)
 
-    print(f'EOS: {EOS_IDX} \n SOS: {SOS_IDX} \n PAD: {PAD_IDX} \n ')
+    print(f'EOS: {EOS_IDX} \n SOS: {SOS_IDX} \n PAD: {PAD_IDX} \n')
 
 
 def dump_tokens(split, data):
