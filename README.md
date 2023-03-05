@@ -29,7 +29,7 @@ data_bin_dir=data-bin/instruct_museformer
 
 mkdir -p data-bin/museformer
 
-fairseq-preprocess --source-lang score --target-lang perf --trainpref data/tokens/train --validpref data/tokens/val --testpref data/tokens/test --destdir data-bin/instruct_museformer --srcdict data/meta/our_dict.txt --tgtdict data/meta/our_dict.txt
+fairseq-preprocess --source-lang score --target-lang perf --trainpref ../data/tokens/train --validpref ../data/tokens/val --testpref ../data/tokens/test --destdir data-bin/instruct_museformer --srcdict data/meta/our_dict.txt --tgtdict data/meta/our_dict.txt
   ```
 
 

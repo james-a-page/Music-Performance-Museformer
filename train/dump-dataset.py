@@ -23,7 +23,7 @@ def dump_dataset(cfg_file):
 
     print(f'EOS: {EOS_IDX} \n SOS: {SOS_IDX} \n PAD: {PAD_IDX} \n')
 
-
+# Museformer assumes bar tokens at the end of the bar => add a bar token before the end of sequence token.
 def dump_tokens(split, data):
     score_tok, perf_tok = [],[]
     print(f"Loading {split} tokens...")
@@ -35,17 +35,19 @@ def dump_tokens(split, data):
             continue
         else:
             for i in range(len(score)):
-                score_tok.append(" ".join(
-                    str(x) for x in list(score[i].numpy())))
-                perf_tok.append(" ".join(
-                    str(x) for x in list(perf[i].numpy())))
+                score_temp = score[i]
+                perf_temp = perf[i]
+                score_temp = np.insert(score_temp.numpy(), -1, 4)
+                perf_temp = np.insert(perf_temp.numpy(), -1, 4)
+                score_tok.append(" ".join(str(x) for x in list(score_temp)))
+                perf_tok.append(" ".join(str(x) for x in list(perf_temp)))
     print(f"Done")
     print(f"Writing {split}.score...")
-    with open(f'{split}.score', 'w') as score_f:
+    with open(f'data/tokens/{split}.score', 'w') as score_f:
         score_f.writelines(line + '\n' for line in score_tok)
     print(f"Done")
     print(f"Writing {split}.perf...")
-    with open(f'{split}.perf', 'w') as perf_f:
+    with open(f'data/tokens/{split}.perf', 'w') as perf_f:
         perf_f.writelines(line + '\n' for line in perf_tok)
     print(f"Done")
 

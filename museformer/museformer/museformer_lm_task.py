@@ -18,6 +18,7 @@ from .datasets.remove_short_size_samples_dataset import MayRemoveShortSizeSample
 from .datasets.chunk_sequence_dataset_2 import ChunkSequenceDataset as ChunkSequenceDataset2
 from .datasets.prefix_tag_dataset import PrefixTagDataset
 from .datasets.music_monolingual_dataset_2 import MusicMonolingualDataset as MusicMonolingualDataset2
+from .datasets.music_bilingual_dataset_2 import MusicBilingualDataset as MusicBilingualDataset2
 from .datasets.remove_long_size_samples_dataset import MayRemoveLongSizeSamplesDataset
 from .datasets.truncate_music_dataset_2 import TruncateMusicDataset as TruncateMusicDataset2
 from .datasets.post_process_dataset_2 import PostProcessDataset as PostProcessDataset2
@@ -95,19 +96,35 @@ class MuseformerLanguageModelingTask(LanguageModelingTask):
         assert len(paths) > 0
 
         data_path = paths[(epoch - 1) % len(paths)]
-        split_path = os.path.join(data_path, split)
 
-        dataset = data_utils.load_indexed_dataset(
-            split_path, self.dictionary, self.args.dataset_impl, combine=combine
+        split_path_src = os.path.join(data_path, split+'.score-perf.score')
+        split_path_tgt = os.path.join(data_path, split+'.score-perf.perf')
+
+
+        dataset_src = data_utils.load_indexed_dataset(
+            split_path_src, self.dictionary, self.args.dataset_impl, combine=combine
         )
-        if dataset is None:
+        if dataset_src is None:
             raise FileNotFoundError(
-                "Dataset not found: {} ({})".format(split, split_path)
+                "Dataset not found: {} ({})".format(split, split_path_src)
             )
 
-        dataset = ExtendedWrapperDataset(dataset)
+        dataset_src = ExtendedWrapperDataset(dataset_src)
 
-        dataset = MayRemoveShortSizeSamplesDataset(dataset, 2)  # Delete empty samples
+        dataset_src = MayRemoveShortSizeSamplesDataset(dataset_src, 2)  # Delete empty samples
+
+
+        dataset_tgt = data_utils.load_indexed_dataset(
+            split_path_tgt, self.dictionary, self.args.dataset_impl, combine=combine
+        )
+        if dataset_tgt is None:
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format(split, split_path_tgt)
+            )
+
+        dataset_tgt = ExtendedWrapperDataset(dataset_tgt)
+
+        dataset_tgt = MayRemoveShortSizeSamplesDataset(dataset_tgt, 2)  # Delete empty samples
 
         assert self.args.eob_token in self.dictionary
         eob_index = self.dictionary.index(self.args.eob_token)
@@ -119,7 +136,7 @@ class MuseformerLanguageModelingTask(LanguageModelingTask):
 
         take_bos_as_bar = getattr(self.args, 'take_bos_as_bar', False)
 
-        dataset = MusicMonolingualDataset2(dataset)
+        dataset = MusicBilingualDataset2((dataset_src, dataset_tgt))
 
         dataset = ChunkSequenceDataset2(
             dataset, self.source_dictionary,
@@ -134,8 +151,8 @@ class MuseformerLanguageModelingTask(LanguageModelingTask):
             bos_index=self.source_dictionary.eos_index
         )
 
-        dataset = AddBeatDataset(dataset, self.source_dictionary, cache_data_label=data_name, dataset_name=split,
-                                 mask_ts_instead_of_tempo=self.args.beat_mask_ts)
+        # dataset = AddBeatDataset(dataset, self.source_dictionary, cache_data_label=data_name, dataset_name=split,
+        #                          mask_ts_instead_of_tempo=self.args.beat_mask_ts)
 
         max_size_split = getattr(self.args, 'max_size_%s' % split, None)
         dataset = MayRemoveLongSizeSamplesDataset(dataset, max_size_split)

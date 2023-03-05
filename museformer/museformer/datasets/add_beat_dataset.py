@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def get_beat_ids(src_tokens, dictionary, ts_instead_of_tempo=False):
     change = 's' if ts_instead_of_tempo else 't'
-
+    print(dictionary)
     beat_mask = src_tokens.ge(dictionary.type_dict['o'][0]) & src_tokens.lt(dictionary.type_dict['o'][1])
     change_mask = src_tokens.ge(dictionary.type_dict[change][0]) & src_tokens.lt(dictionary.type_dict[change][1])
     bar_mask = src_tokens.ge(dictionary.type_dict['b'][0]) & src_tokens.lt(dictionary.type_dict['b'][1])

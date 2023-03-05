@@ -13,10 +13,10 @@ from fairseq.data.base_wrapper_dataset import BaseWrapperDataset
 logger = logging.getLogger(__name__)
 
 
-def get_bar_chunk_points(seq: torch.Tensor, eob_index, begin_idx=0, take_bos_as_bar=False, bos_index=None):
+def get_bar_chunk_points(seq: torch.Tensor,dict, eob_index, begin_idx=0, take_bos_as_bar=False, bos_index=None,):
     # seq: (seq_len,)
     # eob_index: int
-    is_complete_bar = seq[-1] == eob_index
+    is_complete_bar = seq[-1].item() == int(dict[eob_index])
     indices = seq.eq(eob_index).nonzero(as_tuple=False).squeeze(1)  # (num_bars,)
     indices = indices + 1
     indices = torch.cat(
@@ -65,7 +65,7 @@ class BarChunkSequenceDataset(BaseWrapperDataset):
         chunk_points = self.cache[index]
         if chunk_points is None:
             chunk_points, complete = get_bar_chunk_points(
-                src, self.eob, begin_idx=self.offset,
+                src,self.src_dict, self.eob, begin_idx=self.offset,
                 take_bos_as_bar=self.take_bos_as_bar, bos_index=self.bos_index
             )
             assert complete
