@@ -362,6 +362,8 @@ class REMI(MIDITokenizer):
         ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
         events = self.tokens_to_events(tokens)
 
+        # TODO Remove all instruction tokens
+
         ticks_per_sample = time_division // max(self.beat_res.values())
         ticks_per_bar = time_division * 4
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]

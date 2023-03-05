@@ -10,6 +10,15 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from einops import rearrange
 
+from pynvml import *
+
+
+def print_gpu_utilization():
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
+    print(f"GPU memory occupied: {info.used//1024**2} MB.")
+
 
 def train(cfg_file):
     cfg = load_config(cfg_file)
@@ -26,8 +35,10 @@ def train(cfg_file):
 
     train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
-    encoder = EncoderRNN(cfg["encoder"], len(tokenizer.vocab), device).to(device)
-    decoder = DecoderRNN(cfg["decoder"], len(tokenizer.vocab), device).to(device)
+    encoder = EncoderRNN(cfg["encoder"], len(tokenizer.vocab._token_to_event), device).to(device)
+    decoder = DecoderRNN(cfg["decoder"], len(tokenizer.vocab._token_to_event), device).to(device)
+
+    #print_gpu_utilization()
 
     # Optimizer
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=float(cfg["encoder"].get("lr")))
@@ -35,7 +46,6 @@ def train(cfg_file):
     criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     epochs = cfg["training"].get("epochs")
-    max_length = cfg["training"].get("max_length")
     batch_size = cfg["data"].get("batch_size")
 
     print(len(train_loader))
@@ -71,6 +81,8 @@ def train(cfg_file):
                 l = criterion(decoder_output.cpu(), tokens_pred[:, idx])
                 loss += l
                 cum_loss += l
+
+            #print_gpu_utilization()
                 
             avg_loss = cum_loss / target_length
 
@@ -84,8 +96,7 @@ def train(cfg_file):
 
         # Greedily decode last example
         decoded_tokens = greedy_decode(encoder, decoder, tokens[0], EOS_IDX, SOS_IDX, device)
-        print(decoded_tokens)
-
+ 
         # Val
         val_loss = 0
         encoder.eval()
@@ -115,11 +126,14 @@ def train(cfg_file):
                     cum_loss += l
                 val_loss += cum_loss / target_length
 
+                print_gpu_utilization()
+
         val_loss /= len(val_loader)
         writer.add_scalar('Loss/val', val_loss, global_step)
 
 
 if __name__ == "__main__":
+    print("a")
     parser = argparse.ArgumentParser("ttttt")
     parser.add_argument(
         "config",

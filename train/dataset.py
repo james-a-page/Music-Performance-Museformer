@@ -16,21 +16,55 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 
 class ASAPDataset(Dataset):
-    def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX):
+    def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX):
         self.dataset_path = data_cfg.get("dataset_path")
         self.csv_path = data_cfg.get("csv_path")
         self.new_tokens_dir = data_cfg.get("new_tokens_dir")
+        self.dataset_save_path = data_cfg.get("dataset_save_path")
+        self.max_example_len = data_cfg.get("max_example_len")
 
         self.SOS_IDX = SOS_IDX
         self.EOS_IDX = EOS_IDX
+        self.PAD_IDX = PAD_IDX
 
         # Build tokenizer, get bad rows
         self.tokenizer, bad_xmls = self._build_tokenizer(tokenizer)
 
         # Build data
-        self.data = pd.read_csv(self.csv_path)
-        self.data = self.data[['xml_score', 'midi_score', 'midi_performance']]
-        self.data = self.data.drop(bad_xmls)
+        self.data = self._build_dataset(tokenizer, bad_xmls)
+
+
+    def _build_dataset(self, tokenizer, bad_xmls):
+        """
+        Creates dataframe. Drops corrupted files, and examples that are too long
+        """
+        if os.path.exists(self.dataset_save_path):
+            return pd.read_csv(self.dataset_save_path)
+        else:
+            print("Building dataset")
+            data = pd.read_csv(self.csv_path)
+            data = data[['xml_score', 'midi_score', 'midi_performance']]
+            data = data.drop(bad_xmls)
+
+            # Drop examples that are too long
+            long_examples = []
+            for idx in range(len(data)):
+                xml, midi, midi_y = data.iloc[idx]
+
+                instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
+                tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
+                target_tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
+
+                if len(tokens) > self.max_example_len or len(target_tokens) > self.max_example_len:
+                    long_examples.append(idx)
+
+            data = data.drop(long_examples)
+            data.to_csv(self.dataset_save_path, index=False)
+
+            print("Built")
+            print('{:} long examples dropped, which was {:.2f} of the whole dataset'.format(len(long_examples), len(long_examples) / len(data)))
+
+            return data
 
 
     def _load_tokenizer(self, tokenizer):
@@ -54,6 +88,7 @@ class ASAPDataset(Dataset):
         if os.path.exists(self.new_tokens_dir):
             return self._load_tokenizer(tokenizer)
         else:
+            print("Building tokenizer")
             os.mkdir(self.new_tokens_dir)
 
             all_xml = pd.read_csv(self.csv_path)['xml_score'].tolist()
@@ -80,6 +115,9 @@ class ASAPDataset(Dataset):
 
             with open(os.path.join(self.new_tokens_dir, "bad_xmls.pickle"), "wb+") as f:
                 pickle.dump(bad_xmls, f)
+
+            print("Built")
+            print('{:} bad examples dropped, which was {:.2f} of the whole dataset'.format(len(bad_xmls), len(bad_xmls) / len(all_xml)))
             
             return tokenizer, bad_xmls
 
@@ -105,6 +143,12 @@ class ASAPDataset(Dataset):
 
         target_tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
         target_tokens = torch.tensor([self.SOS_IDX] + target_tokens + [self.EOS_IDX])
+
+        # Create mask
+        tokens_mask = torch.arange(len(tokens))[None, :] == 0
+        for idx in range(1, len(tokens)):
+            tmp_mask = torch.arange(len(tokens))[None, :] <= idx
+            tokens_mask = torch.concat((tokens_mask, tmp_mask), dim=0)
 
         return tokens, target_tokens
 
@@ -157,7 +201,7 @@ def build_tokenizer(data_cfg: dict):
 def load_data(data_cfg: dict):
     tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = build_tokenizer(data_cfg)
 
-    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX)
+    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX)
 
     # Create splits
     indices = list(range(len(dataset)))
