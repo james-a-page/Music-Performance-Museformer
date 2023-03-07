@@ -26,8 +26,11 @@ def train(cfg_file):
     print('Device: ', device)
 
     log_dir = cfg["generic"].get("log_dir")
+
+    """
     if cfg['generic'].get('clear_log') and os.path.exists(log_dir):
         shutil.rmtree(log_dir)
+    """
     writer = SummaryWriter(log_dir=log_dir)
 
     # Set the random seed
@@ -38,7 +41,8 @@ def train(cfg_file):
     encoder = EncoderRNN(cfg["encoder"], len(tokenizer.vocab._token_to_event), device).to(device)
     decoder = DecoderRNN(cfg["decoder"], len(tokenizer.vocab._token_to_event), device).to(device)
 
-    #print_gpu_utilization()
+    if device == "cuda":
+        print_gpu_utilization()
 
     # Optimizer
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=float(cfg["encoder"].get("lr")))
@@ -47,6 +51,13 @@ def train(cfg_file):
 
     epochs = cfg["training"].get("epochs")
     batch_size = cfg["data"].get("batch_size")
+
+    # Save stuff
+    save = cfg["training"].get("save")
+    save_every_x_epochs = cfg["training"].get("save_every_x_epochs")
+    save_dir = cfg["training"].get("save_dir")
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
 
     print(len(train_loader))
 
@@ -82,7 +93,8 @@ def train(cfg_file):
                 loss += l
                 cum_loss += l
 
-            #print_gpu_utilization()
+            if device == "cuda":
+                print_gpu_utilization()
                 
             avg_loss = cum_loss / target_length
 
@@ -126,10 +138,16 @@ def train(cfg_file):
                     cum_loss += l
                 val_loss += cum_loss / target_length
 
-                print_gpu_utilization()
+                if device == "cuda":
+                    print_gpu_utilization()
 
         val_loss /= len(val_loader)
         writer.add_scalar('Loss/val', val_loss, global_step)
+
+        # Save
+        if (epoch + 1) % save_every_x_epochs == 0:
+            torch.save(encoder.state_dict(), os.path.join(save_dir, "encoder_{:}.pt".format(epoch)))
+            torch.save(decoder.state_dict(), os.path.join(save_dir, "decoder_{:}.pt".format(epoch)))
 
 
 if __name__ == "__main__":

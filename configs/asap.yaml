@@ -21,3 +21,6 @@ decoder:
   lr: 1e-4
 training:
   epochs: 1
+  save: True
+  save_every_x_epochs: 1
+  save_dir: "./models/"
