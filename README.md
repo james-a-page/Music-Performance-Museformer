@@ -28,7 +28,7 @@ python -m pipenv run python ./train/dump-dataset.py ./config/asap.yaml
 
 cd museformer
 
-mkdir -p data-bin/museformer
+mkdir -p data-bin/instruct_museformer
 
 fairseq-preprocess --source-lang score --target-lang perf --trainpref ../data/tokens/train --validpref ../data/tokens/val --testpref ../data/tokens/test --destdir data-bin/instruct_museformer --srcdict data/meta/our_dict.txt --tgtdict data/meta/our_dict.txt
 

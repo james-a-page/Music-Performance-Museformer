@@ -55,7 +55,9 @@ def dump_vocab_dict(tokenizer):
     vocab = tokenizer.vocab
     with open('./museformer/data/meta/our_dict.txt', 'w') as dict_f:
         for tok in list(vocab.event_to_token.values()):
-            dict_f.write(str(tok) + ' 1\n')
+            if tok not in [0,1,2]:
+                dict_f.write(str(tok) + ' 1\n')
+
 
 
 
