@@ -16,9 +16,9 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 
 class ASAPDataset(Dataset):
-    def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX):
+    def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX, SEP_IDX):
         self.dataset_path = data_cfg.get("dataset_path")
-        self.csv_path = data_cfg.get("csv_path")
+        self.metadata_path = data_cfg.get("metadata_path")
         self.new_tokens_dir = data_cfg.get("new_tokens_dir")
         self.dataset_save_path = data_cfg.get("dataset_save_path")
         self.max_example_len = data_cfg.get("max_example_len")
@@ -26,6 +26,7 @@ class ASAPDataset(Dataset):
         self.SOS_IDX = SOS_IDX
         self.EOS_IDX = EOS_IDX
         self.PAD_IDX = PAD_IDX
+        self.SEP_IDX = SEP_IDX
 
         # Build tokenizer, get bad rows
         self.tokenizer, bad_xmls = self._build_tokenizer(tokenizer)
@@ -34,17 +35,55 @@ class ASAPDataset(Dataset):
         self.data = self._build_dataset(tokenizer, bad_xmls)
 
 
+    def _split_bars(self, example, BAR_IDX):
+        bars = []
+        current_bar = []
+        for i in example:
+            if i == BAR_IDX and current_bar != []:
+                bars.append(current_bar)
+                current_bar = []
+            elif i != BAR_IDX:
+                current_bar.append(i)
+
+        return bars
+
+
+    def _build_tgt_bar_examples(self, tgt, BAR_IDX):
+        tgt_bars = self._split_bars(tgt, BAR_IDX)
+
+        prev_tgt_bars = []
+        for idx, bar in enumerate(tgt_bars):
+            prev_bars = []
+            for prev_bar_idx in self.previous_bars:
+                if idx - prev_bar_idx >= 0:
+                    prev_bars.append(tgt_bars[idx - prev_bar_idx])
+
+            # Flatten, add bars
+            flattened = []
+            if prev_bars != []:
+                for i in prev_bars:  # TODO special token
+                    flattened += [BAR_IDX]
+                    flattened += i
+
+                flattened += [BAR_IDX]
+                    
+            prev_tgt_bars.append(flattened)  # TODO flatten
+
+        return prev_tgt_bars
+
+
     def _build_dataset(self, tokenizer, bad_xmls):
         """
-        Creates dataframe. Drops corrupted files, and examples that are too long
+        Creates dataframe. Drops corrupted files, and examples that are too long. Constructs examples
+        from specific bars
         """
         if os.path.exists(self.dataset_save_path):
             return pd.read_csv(self.dataset_save_path)
         else:
             print("Building dataset")
-            data = pd.read_csv(self.csv_path)
+            data = pd.read_csv(self.metadata_path)
             data = data[['xml_score', 'midi_score', 'midi_performance']]
-            data = data.drop(bad_xmls)
+            data = data.drop(bad_xmls).reset_index(drop=True)
 
             # Drop examples that are too long
             long_examples = []
@@ -55,16 +94,47 @@ class ASAPDataset(Dataset):
                 tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
                 target_tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
 
-                if len(tokens) > self.max_example_len or len(target_tokens) > self.max_example_len:
+                if len(tokens) + 2 > self.max_example_len or len(target_tokens) + 2 > self.max_example_len:  # + 2 for SOS and EOS tokens
                     long_examples.append(idx)
 
-            data = data.drop(long_examples)
+            data = data.drop(long_examples).reset_index(drop=True)
             data.to_csv(self.dataset_save_path, index=False)
 
             print("Built")
             print('{:} long examples dropped, which was {:.2f} of the whole dataset'.format(len(long_examples), len(long_examples) / len(data)))
 
             return data
+
+            """
+            print("Building dataset")
+            metadata = pd.read_csv(self.metadata_path)
+            metadata = metadata[['xml_score', 'midi_score', 'midi_performance']]
+            metadata = metadata.drop(bad_xmls)
+
+            # Build bar examples
+            examples = {'src': [], 'prev_tgt': [], 'tgt': []}
+            BAR_IDX = tokenizer.vocab._event_to_token['Bar_None']
+            counter = 0
+            for idx in range(len(metadata)):
+                print(idx)
+                xml, midi_src, midi_target = metadata.iloc[idx]
+
+                instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
+                src = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_src), instructions)
+                tgt = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_target), instructions)
+
+                prev_tgt = self._build_tgt_bar_examples(tgt, BAR_IDX)
+                examples['src'] += src
+                examples['prev_tgt'] += prev_tgt
+                examples['tgt'] += tgt
+
+                assert 1 == 0
+
+            data = pd.DataFrame.from_dict(examples)
+            data.to_csv(self.dataset_save_path, index=False)
+
+            return data
+            """
 
 
     def _load_tokenizer(self, tokenizer):
@@ -91,7 +161,7 @@ class ASAPDataset(Dataset):
             print("Building tokenizer")
             os.mkdir(self.new_tokens_dir)
 
-            all_xml = pd.read_csv(self.csv_path)['xml_score'].tolist()
+            all_xml = pd.read_csv(self.metadata_path)['xml_score'].tolist()
 
             bad_xmls = list()
             new_instructions = list()
@@ -138,19 +208,26 @@ class ASAPDataset(Dataset):
         xml, midi, midi_y = self.data.iloc[idx]
 
         instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
-        tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
-        tokens = torch.tensor([self.SOS_IDX] + tokens + [self.EOS_IDX])
+        src = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
+        src = [self.SOS_IDX] + src + [self.EOS_IDX]
 
-        target_tokens = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
-        target_tokens = torch.tensor([self.SOS_IDX] + target_tokens + [self.EOS_IDX])
+        tgt = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
+        tgt = [self.SOS_IDX] + tgt + [self.EOS_IDX]
 
-        # Create mask
-        tokens_mask = torch.arange(len(tokens))[None, :] == 0
-        for idx in range(1, len(tokens)):
-            tmp_mask = torch.arange(len(tokens))[None, :] <= idx
-            tokens_mask = torch.concat((tokens_mask, tmp_mask), dim=0)
+        assert len(src) < self.max_example_len
+        assert len(tgt) < self.max_example_len
 
-        return tokens, target_tokens
+        if len(src) < len(tgt):  # Pad src with <SEP> tokens
+            no_tokens = len(tgt) - len(src)
+            src += [self.SEP_IDX] * no_tokens
+
+        elif len(src) > len(tgt):  # Pad tgt with <EOS> tokens
+            no_tokens = len(src) - len(tgt)
+            tgt += [self.EOS_IDX] * no_tokens
+
+        assert len(src) == len(tgt)
+
+        return torch.tensor(src), torch.tensor(tgt)
 
 
 class PadCollate:
@@ -189,19 +266,21 @@ def build_tokenizer(data_cfg: dict):
                         additional_tokens,
                         mask=True,
                         pad=True,
-                        sos_eos=True)
+                        sos_eos=True,
+                        sep=True,)
 
     PAD_IDX = 0
     SOS_IDX = 1
     EOS_IDX = 2
+    SEP_IDX = 4
 
-    return tokenizer, PAD_IDX, SOS_IDX, EOS_IDX
+    return tokenizer, PAD_IDX, SOS_IDX, EOS_IDX, SEP_IDX
 
 
 def load_data(data_cfg: dict):
-    tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = build_tokenizer(data_cfg)
+    tokenizer, PAD_IDX, SOS_IDX, EOS_IDX, SEP_IDX = build_tokenizer(data_cfg)
 
-    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX)
+    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX, SEP_IDX)
 
     # Create splits
     indices = list(range(len(dataset)))

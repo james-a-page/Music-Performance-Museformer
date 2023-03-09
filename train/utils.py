@@ -38,34 +38,6 @@ def load_config(path="configs/default.yaml") -> dict:
     return cfg
 
 
-def greedy_decode(encoder, decoder, tokens, EOS_IDX, SOS_IDX, device):
-    """
-    Decode single example greedily
-    """
-    decoded_tokens = []
-    with torch.no_grad():
-        encoder_hidden = encoder(tokens.to(device))
-
-        decoder_input = torch.tensor([SOS_IDX], device=device)
-        decoder_hidden = encoder_hidden
-
-        # Decoding, teacher forcing
-        sm = torch.nn.Softmax(dim=1)
-        for idx in range(20000):
-            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
-
-            # Decode output
-            decoder_output_sm = sm(decoder_output)
-            argmax_token = torch.argmax(decoder_output_sm, dim=1).item()
-
-            decoded_tokens.append(argmax_token)
-            decoder_input = torch.tensor([argmax_token], device=device)
-            if argmax_token == EOS_IDX:
-                break
-
-    return decoded_tokens
-
-
 def generate_tokens(
         tokenizer,
         midi_path: str,
