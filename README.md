@@ -1,3 +1,12 @@
+# Museformer Inspired Score->Performance Transformer
+
+The museformer architecture proposes a contextual masking approach, that reduces the number of weights needed to be learnt by only attending fully attending immiedietly preceeding bar and then only a summary token of related bars.
+
+To implement this mask, we require: a similarity matching across bars, and postional information about bar locations relative to a point.
+
+# -----------------------Deprecated Below --------------------------------
+Museformer achitecture not feasible for our task due to the lack of encoder. Due to the possible mismatch in token position and length in performance-score tokens we need and a full encoder-decoder transformer. Previously mentioned how we will treat the problem as a translation task, however the difference in languages means we need more than just a decoder. (We will make use of the museformer implementations however we will implement separately rather than attempting to make changes to their code base from this point)
+
 ## Instructions/Notes
 
 We're making use of the Museformer model from Muzic by Microsoft (https://github.com/microsoft/muzic/tree/main/museformer).
