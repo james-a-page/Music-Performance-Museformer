@@ -4,11 +4,11 @@ import shutil
 
 from dataset import load_data
 from utils import set_seed, load_config
-from model import EncoderRNN, DecoderRNN
+from models.model.transformer import Transformer
+from tqdm import tqdm
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from einops import rearrange
 
 
 def train(cfg_file):
@@ -26,58 +26,65 @@ def train(cfg_file):
 
     train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
-    encoder = EncoderRNN(cfg["encoder"], len(tokenizer.vocab), device).to(device)
-    decoder = DecoderRNN(cfg["decoder"], len(tokenizer.vocab), device).to(device)
+    model = Transformer(cfg["transformer"], len(tokenizer.vocab._token_to_event), SOS_IDX, PAD_IDX, device).to(device)
 
     # Optimizer
-    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=float(cfg["encoder"].get("lr")))
-    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=float(cfg["decoder"].get("lr")))
-    criterion = torch.nn.NLLLoss(ignore_index=PAD_IDX)
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg["transformer"].get("lr")))
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     epochs = cfg["training"].get("epochs")
-    max_length = cfg["training"].get("max_length")
     batch_size = cfg["data"].get("batch_size")
 
+    # Save stuff
+    save = cfg["training"].get("save")
+    save_every_x_epochs = cfg["training"].get("save_every_x_epochs")
+    save_dir = cfg["training"].get("save_dir")
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+
+    print(len(train_loader))
+
     for epoch in range(epochs):
-        encoder.train()
-        decoder.train()
-        for batch_idx, batch in enumerate(train_loader):
-            tokens, tokens_pred = batch
+        print(epoch)
 
-            this_batch_size = tokens.shape[0]
-            input_length = tokens.shape[1]
-            target_length = tokens_pred.shape[1]
+        model.train()
+        for batch_idx, batch in tqdm(enumerate(train_loader)):
+            with torch.autocast(device, dtype=torch.float16):
+                src, tgt = batch
+                src, tgt = src.to(device), tgt.to(device)
 
-            loss = 0
-            encoder_optimizer.zero_grad()
-            decoder_optimizer.zero_grad()
+                src = src[:-1, :] # Remove last EOS
+                tgt = tgt[1:, :]  # Remove first SOS
 
-            # Encode input
-            encoder_hidden = encoder(tokens.to(device).cuda())
+                logits = model(src, None)
 
-            decoder_input = torch.full((this_batch_size, 1), SOS_IDX, device=device).cuda()
-            decoder_hidden = encoder_hidden.cuda()
+                optimizer.zero_grad()
+                loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1))
+                loss.backward()
 
-            # Decoding, teacher forcing
-            cum_loss = 0
-            for idx in range(target_length):
-                decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
-                decoder_output = decoder_output[:, 0, :]
-                decoder_input = tokens_pred[:, idx].unsqueeze(1).cuda()
+                optimizer.step()
 
-                l = criterion(decoder_output.cpu(), tokens_pred[:, idx])
-                loss += l
-                cum_loss += l
-                
-            avg_loss = cum_loss / target_length
+                # Tensorboard
+                global_step = epoch*len(train_loader) + batch_idx
+                writer.add_scalar('Loss/train', loss.item(), global_step)
 
-            loss.backward()
-            encoder_optimizer.step()
-            decoder_optimizer.step()
 
-            # Tensorboard
-            global_step = epoch*len(train_loader) + batch_idx
-            writer.add_scalar('Loss/train', avg_loss, global_step)
+        model.eval()
+        val_loss = 0
+        for batch_idx, batch in tqdm(enumerate(val_loader)):
+            with torch.no_grad():
+                with torch.autocast(device, dtype=torch.float16):
+                    src, tgt = batch
+                    src, tgt = src.to(device), tgt.to(device)
+
+                    logits = model(src, None)
+
+                    optimizer.zero_grad()
+                    val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1)).item()
+
+        # Tensorboard
+        avg_val_loss = val_loss / len(val_loader)
+        writer.add_scalar('Loss/val', avg_val_loss, global_step)
 
 
 if __name__ == "__main__":

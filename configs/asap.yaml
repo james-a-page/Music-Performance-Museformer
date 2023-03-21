@@ -5,19 +5,30 @@ generic:
   clear_log: True
 data:
   dataset_path: "data/asap/dataset"
-  csv_path: "data/asap/dataset/metadata.csv"
+  metadata_path: "data/asap/dataset/metadata.csv"
   new_tokens_dir: "data/asap/vocab"
-  shuffle: False
+  dataset_save_path: "data/asap/dataset/dataset.csv"
+  max_example_len: 25000
+  shuffle: True
   dataset_split: [.8, .1, .1]
-  batch_size: 6
+  batch_size: 2
 encoder:
   input_size: 512
   hidden_size: 512
   lr: 1e-4
 decoder:
-  output_size: 512
   hidden_size: 512
   lr: 1e-4
 training:
-  epochs: 1
-  max_length: 5000
+  epochs: 50
+  save: True
+  save_every_x_epochs: 1
+  save_dir: "./models/"
+transformer:
+  d_model: 512
+  n_head: 8
+  max_len: 25000
+  ffn_hidden: 2048  # 2048
+  drop_prob: 0.1
+  n_layers: 4  # 6
+  lr: 1e-4

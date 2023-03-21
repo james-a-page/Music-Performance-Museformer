@@ -39,6 +39,7 @@ class REMI(MIDITokenizer):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
@@ -51,6 +52,7 @@ class REMI(MIDITokenizer):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         params=None,
     ):
         additional_tokens["TimeSignature"] = False  # not compatible
@@ -62,6 +64,7 @@ class REMI(MIDITokenizer):
             pad,
             sos_eos,
             mask,
+            sep,
             params=params,
         )
 
@@ -362,6 +365,8 @@ class REMI(MIDITokenizer):
         ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
         events = self.tokens_to_events(tokens)
 
+        # TODO Remove all instruction tokens
+
         ticks_per_sample = time_division // max(self.beat_res.values())
         ticks_per_bar = time_division * 4
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
@@ -437,7 +442,9 @@ class REMI(MIDITokenizer):
                 "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
-        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = Vocabulary(
+            pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
+        )
 
         # BAR
         vocab.add_event("Bar_None")

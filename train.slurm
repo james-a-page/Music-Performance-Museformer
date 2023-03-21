@@ -21,3 +21,4 @@ python3 -m pipenv run python ./train/dump-dataset.py configs/asap.yaml
 
 # Run the fariseq-train step (assumes data-bin has been populated and all preprocessing is complete)
 srun --nodelist="falcon-04" python3 -m pipenv run train.sh
+# srun --nodelist="falcon-05" python3 -m pipenv run python ./train/train.py configs/asap.yaml

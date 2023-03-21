@@ -18,6 +18,7 @@ tensorboardX = "2.2"
 einops = "*"
 triton=="*"
 
+nvidia-ml-py3 = "*"
 
 [dev-packages]
 

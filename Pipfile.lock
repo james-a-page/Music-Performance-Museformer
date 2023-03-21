@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "60d57b38ea3b7b4d98fcce2204618e76ebe444d5ebd5ba618527134904f7c96d"
+            "sha256": "5c62ddd0d6284ecd4c21273e951b71ea2b9a0c78bb1e0b43addeb7126c901b90"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -552,7 +552,7 @@
                 "sha256:f063b69b090c9d918f9df0a12116029e274daf0181df392839661c4c7ec9018a",
                 "sha256:f9a909a8bae284d46bbfdefbdd4a262ba19d3bc9921b1e76126b1d21c3c34135"
             ],
-            "markers": "python_version < '3.10'",
+            "markers": "python_version >= '3.8'",
             "version": "==1.23.5"
         },
         "nvidia-cublas-cu11": {
@@ -587,6 +587,13 @@
             ],
             "markers": "platform_system == 'Linux'",
             "version": "==8.5.0.96"
+        },
+        "nvidia-ml-py3": {
+            "hashes": [
+                "sha256:390f02919ee9d73fe63a98c73101061a6b37fa694a793abf56673320f1f51277"
+            ],
+            "index": "pypi",
+            "version": "==7.352.0"
         },
         "oauthlib": {
             "hashes": [
@@ -1002,11 +1009,11 @@
         },
         "zipp": {
             "hashes": [
-                "sha256:188834565033387710d046e3fe96acfc9b5e86cbca7f39ff69cf21a4128198b7",
-                "sha256:9e5421e176ef5ab4c0ad896624e87a7b2f07aca746c9b2aa305952800cb8eecb"
+                "sha256:112929ad649da941c23de50f356a2b5570c954b65150642bccdd66bf194d224b",
+                "sha256:48904fc76a60e542af151aded95726c1a5c34ed43ab4134b597665c86d7ad556"
             ],
             "markers": "python_version < '3.10'",
-            "version": "==3.14.0"
+            "version": "==3.15.0"
         }
     },
     "develop": {}
