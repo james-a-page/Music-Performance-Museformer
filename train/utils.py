@@ -38,6 +38,32 @@ def load_config(path="configs/default.yaml") -> dict:
     return cfg
 
 
+def greedy_decode(model, SOS_IDX, EOS_IDX, device):
+    """
+    Decode single example greedily
+    """
+    decoded_tokens = []
+    with torch.no_grad():
+        with torch.autocast(device, dtype=torch.float16):
+            input_tokens = torch.tensor([[SOS_IDX]])
+
+            for i in range(25000):
+                print(i)
+                logits = model(input_tokens.to(device), None)
+
+                logits = logits[:, len(input_tokens)-1, :]
+                top_token = torch.argmax(logits).item()
+
+                decoded_tokens.append(top_token)
+                input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]])), dim=1)
+                
+                
+                if top_token == EOS_IDX:
+                    break
+
+    return decoded_tokens
+
+
 def generate_tokens(
         tokenizer,
         midi_path: str,

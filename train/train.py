@@ -3,7 +3,7 @@ import argparse
 import shutil
 
 from dataset import load_data
-from utils import set_seed, load_config
+from utils import set_seed, load_config, greedy_decode
 from models.model.transformer import Transformer
 from tqdm import tqdm
 
@@ -53,10 +53,10 @@ def train(cfg_file):
                 src, tgt = batch
                 src, tgt = src.to(device), tgt.to(device)
 
-                src = src[:-1, :] # Remove last EOS
-                tgt = tgt[1:, :]  # Remove first SOS
+                src = src[:, :-1] # Remove last EOS
+                tgt = tgt[:, 1:]  # Remove first SOS
 
-                logits = model(src, None)
+                logits = model(src, tgt)
 
                 optimizer.zero_grad()
                 loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1))
@@ -67,6 +67,11 @@ def train(cfg_file):
                 # Tensorboard
                 global_step = epoch*len(train_loader) + batch_idx
                 writer.add_scalar('Loss/train', loss.item(), global_step)
+
+
+        if epoch % 5 == 0:
+            tokens = greedy_decode(model, SOS_IDX, EOS_IDX, device)
+            writer.add_text('Decoded/train', str(tokens), global_step)
 
 
         model.eval()
