@@ -38,10 +38,15 @@ class Transformer(nn.Module):
                                device=device)
 
     def forward(self, src, trg):
-        src_mask = self.make_pad_mask(src, src, self.src_pad_idx, self.src_pad_idx) * \
-                   self.make_no_peak_mask(src, src)
+        src_mask = self.make_pad_mask(src, src, self.src_pad_idx, self.src_pad_idx)
+        src_trg_mask = self.make_pad_mask(trg, src, self.trg_pad_idx, self.src_pad_idx)
+        
 
-        output = self.decoder(src, None, src_mask, None)
+        trg_mask = self.make_pad_mask(trg, trg, self.trg_pad_idx, self.trg_pad_idx) * \
+                   self.make_no_peak_mask(trg, trg)
+
+        enc_src = self.encoder(src, src_mask)
+        output = self.decoder(trg, enc_src, trg_mask, src_trg_mask)
         return output
 
     def make_pad_mask(self, q, k, q_pad_idx, k_pad_idx):
