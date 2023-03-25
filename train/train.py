@@ -3,9 +3,10 @@ import argparse
 import shutil
 
 from dataset import load_data
-from utils import set_seed, load_config, greedy_decode
+from utils import set_seed, load_config, greedy_decode, create_mask
 from models.model.transformer import Transformer
 from tqdm import tqdm
+from model import Seq2SeqTransformer
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -27,6 +28,7 @@ def train(cfg_file):
     train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
     model = Transformer(cfg["transformer"], len(tokenizer.vocab._token_to_event), SOS_IDX, PAD_IDX, device).to(device)
+    #model = Seq2SeqTransformer(num_layers=4, emb_size=512, nhead=8, tgt_vocab_size=len(tokenizer.vocab._token_to_event), dim_feedforward=512, dropout=0.0).to(device)
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg["transformer"].get("lr")))
@@ -53,13 +55,16 @@ def train(cfg_file):
 
         model.train()
         for batch_idx, batch in tqdm(enumerate(train_loader)):
-            src, tgt = batch
-            src, tgt = src.to(device).cuda(), tgt.to(device).cuda()
+            tgt = batch
+            tgt = tgt.to(device).cuda()
 
             tgt_input = tgt[:, :-1] # Remove last EOS
             tgt_output = tgt[:, 1:]  # Remove first SOS
+            
+            #logits = model(None, tgt_input.cuda())
 
-            logits = model(src.cuda(), tgt_input.cuda())
+            #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
+            logits = model(None, tgt_input)
 
             optimizer.zero_grad()
             loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1))
@@ -74,20 +79,23 @@ def train(cfg_file):
         # Decode example
         if decode and epoch % decode_every == 0:
             file_path = os.path.join(decode_dir, str(epoch))
-            greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device)
+            greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device)
 
         # Validation loop
         model.eval()
         val_loss = 0
         for batch_idx, batch in tqdm(enumerate(val_loader)):
             with torch.no_grad():
-                src, tgt = batch
-                src, tgt = src.to(device).cuda(), tgt.to(device).cuda()
+                tgt = batch
+                tgt = tgt.to(device).cuda()
 
                 tgt_input = tgt[:, :-1] # Remove last EOS
                 tgt_output = tgt[:, 1:]  # Remove first SOS
 
-                logits = model(src.cuda(), tgt_input.cuda())
+                #logits = model(None, tgt_input.cuda())
+
+                #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
+                logits = model(None, tgt_input)
 
                 val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)).item()
 

@@ -39,20 +39,36 @@ def load_config(path="configs/default.yaml") -> dict:
     return cfg
 
 
-def greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device):
+def generate_square_subsequent_mask(sz, device):
+    mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
+
+
+def create_mask(tgt, device, PAD_IDX):
+    tgt_seq_len = tgt.shape[0]
+
+    tgt_mask = generate_square_subsequent_mask(tgt_seq_len, device)
+
+    tgt_padding_mask = (tgt == PAD_IDX)
+    return tgt_mask, tgt_padding_mask
+
+
+def greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device):
     """
     Decode single example from test dataloader greedily
     """
     decoded_tokens = [SOS_IDX]
 
-    src, tgt = next(iter(test_loader))
-    src = src.to(device).cuda()
+    tgt = next(iter(test_loader))
+    tgt = tgt.to(device).cuda()
 
     input_tokens = torch.tensor([[SOS_IDX]]).cuda()
     with torch.no_grad():
         for i in tqdm(range(200)):
 
-            logits = model(src, input_tokens)
+            #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
+            logits = model(None, input_tokens)
 
             logits = logits[:, logits.shape[1]-1, :]
             top_token = torch.argmax(logits).item()
@@ -64,9 +80,6 @@ def greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, de
             input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]]).cuda()), dim=1)
 
     # Dump to midi
-    src_midi = tokenizer.tokens_to_midi(src.tolist(), [(0, False)])
-    src_midi.dump('{:}_src.mid'.format(file_path))
-
     tgt_midi = tokenizer.tokens_to_midi(tgt.tolist(), [(0, False)])
     tgt_midi.dump('{:}_tgt.mid'.format(file_path))
 
