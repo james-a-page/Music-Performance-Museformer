@@ -8,6 +8,7 @@ from remi_edit import REMI
 from miditok import Vocabulary, Event
 from miditoolkit import MidiFile
 import numpy as np
+from tqdm import tqdm
 
 import torch
 
@@ -38,30 +39,39 @@ def load_config(path="configs/default.yaml") -> dict:
     return cfg
 
 
-def greedy_decode(model, SOS_IDX, EOS_IDX, device):
+def greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device):
     """
-    Decode single example greedily
+    Decode single example from test dataloader greedily
     """
-    decoded_tokens = []
+    decoded_tokens = [SOS_IDX]
+
+    src, tgt = next(iter(test_loader))
+    src = src.to(device).cuda()
+
+    input_tokens = torch.tensor([[SOS_IDX]]).cuda()
     with torch.no_grad():
-        with torch.autocast(device, dtype=torch.float16):
-            input_tokens = torch.tensor([[SOS_IDX]])
+        for i in tqdm(range(200)):
 
-            for i in range(25000):
-                print(i)
-                logits = model(input_tokens.to(device), None)
+            logits = model(src, input_tokens)
 
-                logits = logits[:, len(input_tokens)-1, :]
-                top_token = torch.argmax(logits).item()
+            logits = logits[:, logits.shape[1]-1, :]
+            top_token = torch.argmax(logits).item()
 
-                decoded_tokens.append(top_token)
-                input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]])), dim=1)
-                
-                
-                if top_token == EOS_IDX:
-                    break
+            if top_token == EOS_IDX:
+                break
 
-    return decoded_tokens
+            decoded_tokens.append(top_token)
+            input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]]).cuda()), dim=1)
+
+    # Dump to midi
+    src_midi = tokenizer.tokens_to_midi(src.tolist(), [(0, False)])
+    src_midi.dump('{:}_src.mid'.format(file_path))
+
+    tgt_midi = tokenizer.tokens_to_midi(tgt.tolist(), [(0, False)])
+    tgt_midi.dump('{:}_tgt.mid'.format(file_path))
+
+    gen_midi = tokenizer.tokens_to_midi([decoded_tokens], [(0, False)])
+    gen_midi.dump('{:}_gen.mid'.format(file_path))
 
 
 def generate_tokens(

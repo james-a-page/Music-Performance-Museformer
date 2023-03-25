@@ -37,59 +37,68 @@ def train(cfg_file):
 
     # Save stuff
     save = cfg["training"].get("save")
-    save_every_x_epochs = cfg["training"].get("save_every_x_epochs")
+    save_every = cfg["training"].get("save_every")
     save_dir = cfg["training"].get("save_dir")
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
-    print(len(train_loader))
+    decode = cfg["training"].get("decode")
+    decode_every = cfg["training"].get("decode_every")
+    decode_dir = cfg["training"].get("decode_dir")
+    if not os.path.exists(decode_dir):
+        os.mkdir(decode_dir)
 
     for epoch in range(epochs):
         print(epoch)
 
         model.train()
         for batch_idx, batch in tqdm(enumerate(train_loader)):
-            with torch.autocast(device, dtype=torch.float16):
-                src, tgt = batch
-                src, tgt = src.to(device), tgt.to(device)
+            src, tgt = batch
+            src, tgt = src.to(device).cuda(), tgt.to(device).cuda()
 
-                src = src[:, :-1] # Remove last EOS
-                tgt = tgt[:, 1:]  # Remove first SOS
+            tgt_input = tgt[:, :-1] # Remove last EOS
+            tgt_output = tgt[:, 1:]  # Remove first SOS
 
-                logits = model(src, tgt)
+            logits = model(src.cuda(), tgt_input.cuda())
 
-                optimizer.zero_grad()
-                loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1))
-                loss.backward()
+            optimizer.zero_grad()
+            loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1))
+            loss.backward()
 
-                optimizer.step()
+            optimizer.step()
 
-                # Tensorboard
-                global_step = epoch*len(train_loader) + batch_idx
-                writer.add_scalar('Loss/train', loss.item(), global_step)
+            # Tensorboard
+            global_step = epoch*len(train_loader) + batch_idx
+            writer.add_scalar('Loss/train', loss.item(), global_step)
 
+        # Decode example
+        if decode and epoch % decode_every == 0:
+            file_path = os.path.join(decode_dir, str(epoch))
+            greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device)
 
-        if epoch % 5 == 0:
-            tokens = greedy_decode(model, SOS_IDX, EOS_IDX, device)
-            writer.add_text('Decoded/train', str(tokens), global_step)
-
-
+        # Validation loop
         model.eval()
         val_loss = 0
         for batch_idx, batch in tqdm(enumerate(val_loader)):
             with torch.no_grad():
-                with torch.autocast(device, dtype=torch.float16):
-                    src, tgt = batch
-                    src, tgt = src.to(device), tgt.to(device)
+                src, tgt = batch
+                src, tgt = src.to(device).cuda(), tgt.to(device).cuda()
 
-                    logits = model(src, None)
+                tgt_input = tgt[:, :-1] # Remove last EOS
+                tgt_output = tgt[:, 1:]  # Remove first SOS
 
-                    optimizer.zero_grad()
-                    val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt.reshape(-1)).item()
+                logits = model(src.cuda(), tgt_input.cuda())
+
+                val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)).item()
 
         # Tensorboard
         avg_val_loss = val_loss / len(val_loader)
         writer.add_scalar('Loss/val', avg_val_loss, global_step)
+
+        # Save model
+        if save and epoch % save_every == 0:
+            save_loc = os.path.join(save_dir, "model_epoch_{:}.pt".format(epoch))
+            torch.save(model.state_dict(), save_loc)
 
 
 if __name__ == "__main__":

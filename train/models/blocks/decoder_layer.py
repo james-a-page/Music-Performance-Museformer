@@ -57,7 +57,7 @@ class DecoderLayer(nn.Module):
             
             attention = "flash"
             if attention == "normal":
-                x = self.enc_dec_attention(q=x, k=enc, v=enc, mask=s_mask)
+                x = self.enc_dec_attention(q=x, k=enc, v=enc)
             else:
                 x = self.fast_cross_attention(q=x, k=enc, v=enc)
             

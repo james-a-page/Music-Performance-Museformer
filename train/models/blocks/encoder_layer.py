@@ -35,7 +35,7 @@ class EncoderLayer(nn.Module):
 
         attention = "flash"
         if attention == "normal":
-            x = self.attention(q=x, k=x, v=x, mask=s_mask)
+            x = self.attention(q=x, k=x, v=x)
         else:
             x = self.fast_self_attention(x=x)
         

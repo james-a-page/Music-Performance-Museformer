@@ -8,27 +8,25 @@ data:
   metadata_path: "data/asap/dataset/metadata.csv"
   new_tokens_dir: "data/asap/vocab"
   dataset_save_path: "data/asap/dataset/dataset.csv"
-  max_example_len: 25000
+  max_example_len: 20000
   shuffle: True
   dataset_split: [.8, .1, .1]
-  batch_size: 2
-encoder:
-  input_size: 512
-  hidden_size: 512
-  lr: 1e-4
-decoder:
-  hidden_size: 512
-  lr: 1e-4
+  batch_size: 1
 training:
-  epochs: 50
+  epochs: 500000
   save: True
-  save_every_x_epochs: 1
+  save_every: 1
   save_dir: "./models/"
+  decode: True
+  decode_every: 1
+  decode_dir: "./decoded/"
+eval:
+  load_path: "models/model_epoch_510.pt"
 transformer:
   d_model: 512
   n_head: 8
-  max_len: 25000
+  max_len: 20000
   ffn_hidden: 2048  # 2048
   drop_prob: 0.1
-  n_layers: 4  # 6
-  lr: 1e-4
+  n_layers: 2  # 6
+  lr: 1e-3

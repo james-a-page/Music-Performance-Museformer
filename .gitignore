@@ -2,3 +2,5 @@
 dataset/
 data/*/vocab
 log
+models/
+decoded/

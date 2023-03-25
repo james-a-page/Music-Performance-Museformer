@@ -8,11 +8,12 @@ from remi_edit import REMI
 from musicxmlannotations import genannotations
 from miditok import Event
 from utils import generate_tokens
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 
 class ASAPDataset(Dataset):
@@ -48,28 +49,54 @@ class ASAPDataset(Dataset):
         return bars
 
 
-    def _build_tgt_bar_examples(self, tgt, BAR_IDX):
-        tgt_bars = self._split_bars(tgt, BAR_IDX)
+    def _get_bar_similarity(self, b1, b2):
+        pass
 
-        prev_tgt_bars = []
-        for idx, bar in enumerate(tgt_bars):
-            prev_bars = []
-            for prev_bar_idx in self.previous_bars:
-                if idx - prev_bar_idx >= 0:
-                    prev_bars.append(tgt_bars[idx - prev_bar_idx])
 
-            # Flatten, add bars
-            flattened = []
-            if prev_bars != []:
-                for i in prev_bars:  # TODO special token
-                    flattened += [BAR_IDX]
-                    flattened += i
+    def _get_top_similarities(self, src_bar_seq, tgt_bar):
+        pass
 
-                flattened += [BAR_IDX]
-                    
-            prev_tgt_bars.append(flattened)  # TODO flatten
 
-        return prev_tgt_bars
+    def _build_dataset_bars(self, tokenizer, bad_xmls):
+        """
+        Input, all robotic bars + idxs of most similar bars to tgt
+        Target, single tgt bar
+        """
+        if os.path.exists(self.dataset_save_path):
+            return pd.read_csv(self.dataset_save_path)
+        else:
+            print("Building dataset")
+            data = pd.read_csv(self.metadata_path)
+            data = data[['xml_score', 'midi_score', 'midi_performance']]
+            data = data.drop(bad_xmls).reset_index(drop=True)
+
+            BAR_IDX = tokenizer.vocab._event_to_token['Bar_None']
+
+            examples = {'src': [], 'tgt_bar': []}
+            for idx in tqdm(range(len(data))):
+                if len(examples['src']) >= 20:
+                    break
+
+                xml, midi, midi_y = data.iloc[idx]
+
+                instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
+                src = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi), instructions)
+                tgt = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
+
+                if len(src) + 2 > self.max_example_len or len(tgt) + 2 > self.max_example_len:  # + 2 for SOS and EOS tokens
+                    continue
+
+                src_bars = self._split_bars(src, BAR_IDX)
+                tgt_bars = self._split_bars(tgt, BAR_IDX)
+
+                # Construct example for every target bar
+                for b in tgt_bars:
+                    examples['src'] += [src]
+                    examples['tgt_bar'] += [b]
+
+            data = pd.DataFrame.from_dict(examples)
+            data.to_csv(self.dataset_save_path, index=False)
+            return data
 
 
     def _build_dataset(self, tokenizer, bad_xmls):
@@ -104,37 +131,6 @@ class ASAPDataset(Dataset):
             print('{:} long examples dropped, which was {:.2f} of the whole dataset'.format(len(long_examples), len(long_examples) / len(data)))
 
             return data
-
-            """
-            print("Building dataset")
-            metadata = pd.read_csv(self.metadata_path)
-            metadata = metadata[['xml_score', 'midi_score', 'midi_performance']]
-            metadata = metadata.drop(bad_xmls)
-
-            # Build bar examples
-            examples = {'src': [], 'prev_tgt': [], 'tgt': []}
-            BAR_IDX = tokenizer.vocab._event_to_token['Bar_None']
-            counter = 0
-            for idx in range(len(metadata)):
-                print(idx)
-                xml, midi_src, midi_target = metadata.iloc[idx]
-
-                instructions = genannotations.main(os.path.join(self.dataset_path, xml), time=True, verbose=False)
-                src = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_src), instructions)
-                tgt = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_target), instructions)
-
-                prev_tgt = self._build_tgt_bar_examples(tgt, BAR_IDX)
-                examples['src'] += src
-                examples['prev_tgt'] += prev_tgt
-                examples['tgt'] += tgt
-
-                assert 1 == 0
-
-            data = pd.DataFrame.from_dict(examples)
-            data.to_csv(self.dataset_save_path, index=False)
-
-            return data
-            """
 
 
     def _load_tokenizer(self, tokenizer):
@@ -214,18 +210,8 @@ class ASAPDataset(Dataset):
         tgt = generate_tokens(self.tokenizer, os.path.join(self.dataset_path, midi_y), instructions)
         tgt = [self.SOS_IDX] + tgt + [self.EOS_IDX]
 
-        assert len(src) < self.max_example_len
-        assert len(tgt) < self.max_example_len
-
-        if len(src) < len(tgt):  # Pad src with <SEP> tokens
-            no_tokens = len(tgt) - len(src)
-            src += [self.SEP_IDX] * no_tokens
-
-        elif len(src) > len(tgt):  # Pad tgt with <EOS> tokens
-            no_tokens = len(src) - len(tgt)
-            tgt += [self.EOS_IDX] * no_tokens
-
-        assert len(src) == len(tgt)
+        assert len(src) <= self.max_example_len
+        assert len(tgt) <= self.max_example_len
 
         return torch.tensor(src), torch.tensor(tgt)
 
@@ -295,7 +281,7 @@ def load_data(data_cfg: dict):
     batch_size = data_cfg.get("batch_size")
 
     train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(train_indices), collate_fn=PadCollate(PAD_IDX))
-    val_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(val_indices), collate_fn=PadCollate(PAD_IDX))
-    test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(test_indices), collate_fn=PadCollate(PAD_IDX))
+    val_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SequentialSampler(val_indices), collate_fn=PadCollate(PAD_IDX))
+    test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SequentialSampler(test_indices), collate_fn=PadCollate(PAD_IDX))
 
     return train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX
