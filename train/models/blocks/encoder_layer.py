@@ -13,7 +13,7 @@ from models.layers.fast_attention import CausalSelfAttention
 
 class EncoderLayer(nn.Module):
 
-    def __init__(self, d_model, ffn_hidden, n_head, drop_prob):
+    def __init__(self, d_model, ffn_hidden, n_head, drop_prob, bayes_compression):
         super(EncoderLayer, self).__init__()
         self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
         self.norm1 = LayerNorm(d_model=d_model)
@@ -25,9 +25,12 @@ class EncoderLayer(nn.Module):
                                                        is_causal=False,
                                                        training=True)
 
-        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob)
+        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob, bayes_compression=bayes_compression)
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(p=drop_prob)
+
+        # layers including kl_divergence
+        self.kl_list = [self.ffn]
 
     def forward(self, x, s_mask):
         # 1. compute self attention
@@ -51,3 +54,9 @@ class EncoderLayer(nn.Module):
         x = self.dropout2(x)
         x = self.norm2(x + _x)
         return x
+
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.kl_list:
+            KLD += layer._kl_divergence()
+        return KLD

@@ -26,6 +26,7 @@ class Transformer(nn.Module):
                                enc_voc_size=vocab_size,
                                drop_prob=cfg.get("drop_prob"),
                                n_layers=cfg.get("n_layers"),
+                               bayes_compression=cfg.get("bayes_compression"),
                                device=device)
 
         self.decoder = Decoder(d_model=cfg.get("d_model"),
@@ -35,7 +36,11 @@ class Transformer(nn.Module):
                                dec_voc_size=vocab_size,
                                drop_prob=cfg.get("drop_prob"),
                                n_layers=cfg.get("n_layers"),
+                               bayes_compression=cfg.get("bayes_compression"),
                                device=device)
+
+        # Components including kl_divergence
+        self.kl_list = [self.encoder, self.decoder]
 
     def forward(self, src, trg):
         src_mask = self.make_pad_mask(src, src, self.src_pad_idx, self.src_pad_idx)
@@ -72,3 +77,9 @@ class Transformer(nn.Module):
         mask = torch.tril(torch.ones(len_q, len_k)).type(torch.BoolTensor).to(self.device)
 
         return mask
+
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.kl_list:
+            KLD += layer._kl_divergence()
+        return KLD
