@@ -16,7 +16,7 @@ training:
   epochs: 500000
   save: True
   save_every: 1
-  save_dir: "./models/"
+  save_dir: "./saved_models/"
   load: False
   decode: True
   decode_every: 1

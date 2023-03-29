@@ -2,5 +2,5 @@
 dataset/
 data/*/vocab
 log
-models/
+saved_models/
 decoded/
