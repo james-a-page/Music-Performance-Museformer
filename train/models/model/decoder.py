@@ -11,7 +11,7 @@ from models.embedding.transformer_embedding import TransformerEmbedding
 
 
 class Decoder(nn.Module):
-    def __init__(self, dec_voc_size, max_len, d_model, ffn_hidden, n_head, n_layers, drop_prob, device):
+    def __init__(self, dec_voc_size, max_len, d_model, ffn_hidden, n_head, n_layers, drop_prob, bayes_compression, device):
         super().__init__()
         self.emb = TransformerEmbedding(d_model=d_model,
                                         drop_prob=drop_prob,
@@ -22,7 +22,8 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList([DecoderLayer(d_model=d_model,
                                                   ffn_hidden=ffn_hidden,
                                                   n_head=n_head,
-                                                  drop_prob=drop_prob)
+                                                  drop_prob=drop_prob,
+                                                  bayes_compression=bayes_compression)
                                      for _ in range(n_layers)])
 
         self.linear = nn.Linear(d_model, dec_voc_size)
@@ -36,3 +37,9 @@ class Decoder(nn.Module):
         # pass to LM head
         output = self.linear(trg)
         return output
+
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.layers:
+            KLD += layer._kl_divergence()
+        return KLD

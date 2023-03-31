@@ -13,7 +13,7 @@ from models.layers.fast_attention import CausalSelfAttention, CrossAttention
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self, d_model, ffn_hidden, n_head, drop_prob):
+    def __init__(self, d_model, ffn_hidden, n_head, drop_prob, bayes_compression):
         super(DecoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
         self.norm1 = LayerNorm(d_model=d_model)
@@ -33,9 +33,12 @@ class DecoderLayer(nn.Module):
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(p=drop_prob)
 
-        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob)
+        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob, bayes_compression=bayes_compression)
         self.norm3 = LayerNorm(d_model=d_model)
         self.dropout3 = nn.Dropout(p=drop_prob)
+
+        # layers including kl_divergence
+        self.kl_list = [self.ffn]
 
     def forward(self, dec, enc, t_mask, s_mask):
         # 1. compute self attention
@@ -73,3 +76,9 @@ class DecoderLayer(nn.Module):
         x = self.dropout3(x)
         x = self.norm3(x + _x)
         return x
+
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.kl_list:
+            KLD += layer._kl_divergence()
+        return KLD

@@ -12,6 +12,13 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 
+def objective(discriminator, output, target, kl_divergence):
+    discrimination_error = discriminator(output, target)
+    N = 60000.
+
+    return discrimination_error + kl_divergence / N
+
+
 def train(cfg_file):
     cfg = load_config(cfg_file)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -28,14 +35,18 @@ def train(cfg_file):
     train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
     model = Transformer(cfg["transformer"], len(tokenizer.vocab._token_to_event), SOS_IDX, PAD_IDX, device).to(device)
-    #model = Seq2SeqTransformer(num_layers=4, emb_size=512, nhead=8, tgt_vocab_size=len(tokenizer.vocab._token_to_event), dim_feedforward=512, dropout=0.0).to(device)
+    if cfg["training"].get("load"):
+        model.load_state_dict(torch.load(cfg["eval"].get("load_path")))
+    else:
+        for p in model.parameters():
+            if p.dim() > 1:
+                torch.nn.init.xavier_uniform_(p)
 
     # Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg["transformer"].get("lr")))
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg["transformer"].get("lr")), betas=(0.9, 0.98), eps=1e-9)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     epochs = cfg["training"].get("epochs")
-    batch_size = cfg["data"].get("batch_size")
 
     # Save stuff
     save = cfg["training"].get("save")
@@ -67,7 +78,13 @@ def train(cfg_file):
             logits = model(None, tgt_input)
 
             optimizer.zero_grad()
-            loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1))
+
+            if cfg["transformer"].get("bayes_compression"):
+                KLD = model._kl_divergence()
+                loss = objective(criterion, logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1), KLD)
+            else:
+                loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1))
+
             loss.backward()
 
             optimizer.step()
@@ -79,7 +96,8 @@ def train(cfg_file):
         # Decode example
         if decode and epoch % decode_every == 0:
             file_path = os.path.join(decode_dir, str(epoch))
-            greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device)
+            tokens = greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device)
+            writer.add_text('Decoded/train', str(tokens), global_step)
 
         # Validation loop
         model.eval()
@@ -97,7 +115,11 @@ def train(cfg_file):
                 #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
                 logits = model(None, tgt_input)
 
-                val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)).item()
+                if cfg["transformer"].get("bayes_compression"):
+                    KLD = model._kl_divergence()
+                    val_loss += objective(criterion, logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1), KLD).item()
+                else:
+                    val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)).item()
 
         # Tensorboard
         avg_val_loss = val_loss / len(val_loader)

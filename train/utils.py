@@ -86,6 +86,8 @@ def greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EO
     gen_midi = tokenizer.tokens_to_midi([decoded_tokens], [(0, False)])
     gen_midi.dump('{:}_gen.mid'.format(file_path))
 
+    return decoded_tokens
+
 
 def generate_tokens(
         tokenizer,
