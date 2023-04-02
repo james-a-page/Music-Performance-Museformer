@@ -8,6 +8,7 @@ from remi_edit import REMI
 from miditok import Vocabulary, Event
 from miditoolkit import MidiFile
 import numpy as np
+from tqdm import tqdm
 
 import torch
 
@@ -36,6 +37,56 @@ def load_config(path="configs/default.yaml") -> dict:
     with open(path, "r", encoding="utf-8") as ymlfile:
         cfg = yaml.load(ymlfile, Loader=yaml.Loader)
     return cfg
+
+
+def generate_square_subsequent_mask(sz, device):
+    mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
+    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+    return mask
+
+
+def create_mask(tgt, device, PAD_IDX):
+    tgt_seq_len = tgt.shape[0]
+
+    tgt_mask = generate_square_subsequent_mask(tgt_seq_len, device)
+
+    tgt_padding_mask = (tgt == PAD_IDX)
+    return tgt_mask, tgt_padding_mask
+
+
+def greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device):
+    """
+    Decode single example from test dataloader greedily
+    """
+    decoded_tokens = [SOS_IDX]
+
+    tgt = next(iter(test_loader))
+    tgt = tgt.to(device).cuda()
+
+    input_tokens = torch.tensor([[SOS_IDX]]).cuda()
+    with torch.no_grad():
+        for i in tqdm(range(200)):
+
+            #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
+            logits = model(None, input_tokens)
+
+            logits = logits[:, logits.shape[1]-1, :]
+            top_token = torch.argmax(logits).item()
+
+            if top_token == EOS_IDX:
+                break
+
+            decoded_tokens.append(top_token)
+            input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]]).cuda()), dim=1)
+
+    # Dump to midi
+    tgt_midi = tokenizer.tokens_to_midi(tgt.tolist(), [(0, False)])
+    tgt_midi.dump('{:}_tgt.mid'.format(file_path))
+
+    gen_midi = tokenizer.tokens_to_midi([decoded_tokens], [(0, False)])
+    gen_midi.dump('{:}_gen.mid'.format(file_path))
+
+    return decoded_tokens
 
 
 def generate_tokens(
