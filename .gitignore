@@ -2,3 +2,6 @@
 
 *.perf
 *.score
+data/asap/dataset/
+*.pickle
+log/events.out.tfevents.1680445269.James-PC.5136.0
