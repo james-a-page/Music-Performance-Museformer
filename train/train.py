@@ -3,9 +3,10 @@ import argparse
 import shutil
 
 from dataset import load_data
-from utils import set_seed, load_config, greedy_decode
+from utils import set_seed, load_config, greedy_decode, create_mask
 from models.model.transformer import Transformer
 from tqdm import tqdm
+from model import Seq2SeqTransformer
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -71,11 +72,8 @@ def train(cfg_file):
 
             tgt_input = tgt[:, :-1] # Remove last EOS
             tgt_output = tgt[:, 1:]  # Remove first SOS
-
-            outputs = model(src, tgt_input, src_pad_mask, tgt_pad_mask)
-
-            print("[{}, {}],".format(src.shape[1], torch.cuda.max_memory_allocated() / 1e9))
-            continue
+            
+            logits = model(None, tgt_input.cuda())
 
             optimizer.zero_grad()
             loss = 0
@@ -109,13 +107,16 @@ def train(cfg_file):
         val_loss = 0
         for batch_idx, batch in tqdm(enumerate(val_loader)):
             with torch.no_grad():
-                src, tgt = batch
-                src, tgt = src.to(device).cuda(), tgt.to(device).cuda()
+                tgt = batch
+                tgt = tgt.to(device).cuda()
 
                 tgt_input = tgt[:, :-1] # Remove last EOS
                 tgt_output = tgt[:, 1:]  # Remove first SOS
 
-                logits = model(src.cuda(), tgt_input.cuda())
+                #logits = model(None, tgt_input.cuda())
+
+                #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
+                logits = model(None, tgt_input)
 
                 if cfg["transformer"].get("bayes_compression"):
                     KLD = model._kl_divergence()
