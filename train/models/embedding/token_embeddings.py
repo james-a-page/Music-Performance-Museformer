@@ -12,11 +12,11 @@ class TokenEmbedding(nn.Embedding):
     they will dense representation of word using weighted matrix
     """
 
-    def __init__(self, vocab_size, d_model):
+    def __init__(self, vocab_size, d_model, PAD_IDX):
         """
         class for token embedding that included positional information
 
         :param vocab_size: size of vocabulary
         :param d_model: dimensions of model
         """
-        super(TokenEmbedding, self).__init__(vocab_size, d_model, padding_idx=1)
+        super(TokenEmbedding, self).__init__(vocab_size, d_model, padding_idx=PAD_IDX)

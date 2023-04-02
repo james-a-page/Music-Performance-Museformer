@@ -10,6 +10,7 @@ from miditok import Event
 from utils import generate_tokens
 from tqdm import tqdm
 from miditoolkit import MidiFile
+from preprocess import MIDI_to_encoding
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -18,7 +19,7 @@ from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 
 class ASAPDataset(Dataset):
-    def __init__(self, data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX, SEP_IDX):
+    def __init__(self, data_cfg, SOS_IDX, EOS_IDX, PAD_IDX):
         self.dataset_path = data_cfg.get("dataset_path")
         self.metadata_path = data_cfg.get("metadata_path")
         self.new_tokens_dir = data_cfg.get("new_tokens_dir")
@@ -28,58 +29,38 @@ class ASAPDataset(Dataset):
         self.SOS_IDX = SOS_IDX
         self.EOS_IDX = EOS_IDX
         self.PAD_IDX = PAD_IDX
-        self.SEP_IDX = SEP_IDX
 
-        self.tokenizer = tokenizer
-        self.data = self._build_dataset(tokenizer)
-
-
-    def _build_dataset(self, tokenizer):
-        """
-        Creates dataframe. Drops corrupted files, and examples that are too long. Constructs examples
-        from specific bars
-        """
-        if os.path.exists(self.dataset_save_path):
-            return pd.read_csv(self.dataset_save_path)
-        else:
-            print("Building dataset")
-            data = pd.read_csv(self.metadata_path)
-            data = data[['midi_score']]
-
-            # Drop examples that are too long
-            long_examples = []
-            for idx in tqdm(range(len(data))):  # TODO store tokens in dataset
-                midi_path = data.iloc[idx]['midi_score']
-                midi = MidiFile(os.path.join(self.dataset_path, midi_path))
-
-                tokens = tokenizer(midi)
-
-                if len(tokens) + 2 > self.max_example_len:  # + 2 for SOS and EOS tokens
-                    long_examples.append(idx)
-
-            data = data.drop(long_examples).reset_index(drop=True)
-            data.to_csv(self.dataset_save_path, index=False)
-
-            print("Built")
-            print('{:} long examples dropped, which was {:.2f} of the whole dataset'.format(len(long_examples), len(long_examples) / len(data)))
-
-            return data
+        # Build data
+        self.data = pd.read_csv(self.metadata_path)[['midi_score', 'midi_performance']]
+        self.data.to_csv(self.dataset_save_path, index=False)
 
 
     def __len__(self):
         return len(self.data)
 
 
+    def _construct_and_shift(self, tokens):
+        output = []
+        output += [[0, 0, 0, 0, 0, 0, 0, 0]]  # SOS_IDX
+
+        for bar in tokens:
+            bar_shifted = [i + 3 for i in bar]
+            output += [bar_shifted]
+
+        output += [[1, 1, 1, 1, 1, 1, 1, 1]]  # EOS_IDX
+        return output
+
+
     def __getitem__(self, idx):
-        midi_path = self.data.iloc[idx]['midi_score']
-        midi = MidiFile(os.path.join(self.dataset_path, midi_path))
+        src_path, tgt_path = self.data.iloc[idx]
 
-        tokens = self.tokenizer(midi)
-        tokens = [self.SOS_IDX] + tokens + [self.EOS_IDX]
+        src = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, src_path)))
+        src = self._construct_and_shift(src)
 
-        assert len(tokens) <= self.max_example_len
+        tgt = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, tgt_path)))
+        tgt = self._construct_and_shift(tgt)
 
-        return torch.tensor(tokens)
+        return torch.tensor(src), torch.tensor(tgt)
 
 
 class PadCollate:
@@ -87,48 +68,31 @@ class PadCollate:
         self.PAD_IDX = PAD_IDX
 
     def __call__(self, batch):
-        max_seq_length = max([len(x) for x in batch])
-        tokens = pad_sequence(batch, batch_first=True, padding_value=self.PAD_IDX)
+        src, tgt = zip(*batch)
+        
+        # TODO fix padding, create separate list to track PAD tokens for both
 
-        return tokens
+        src = pad_sequence(src, batch_first=True, padding_value=self.PAD_IDX)
+        tgt = pad_sequence(tgt, batch_first=True, padding_value=self.PAD_IDX)
 
+        # Construct padding masks
+        src_pad_mask = src.ne(self.PAD_IDX).float()
+        src_pad_mask = torch.sum(src_pad_mask, dim=-1)
+        src_pad_mask = src_pad_mask > 0
 
-def build_tokenizer(data_cfg: dict):
-    pitch_range = range(21, 109)
-    beat_res = {(0, 4): 128}
-    nb_velocities = 32
-    additional_tokens = {
-        'Chord': False,
-        'Rest': False,
-        'Tempo': True,
-        'Program': False,
-        'TimeSignature': True,
-        'rest_range': (2, 32),  # (half, 8 beats)
-        'nb_tempos': 512,  # nb of tempo bins
-        'tempo_range': (1, 400)
-    }  # (min, max)
+        tgt_pad_mask = tgt.ne(self.PAD_IDX).float()
+        tgt_pad_mask = torch.sum(tgt_pad_mask, dim=-1)
+        tgt_pad_mask = tgt_pad_mask > 0
 
-    tokenizer = REMI(pitch_range,
-                        beat_res,
-                        nb_velocities,
-                        additional_tokens,
-                        mask=True,
-                        pad=True,
-                        sos_eos=True,
-                        sep=True,)
-
-    PAD_IDX = 0
-    SOS_IDX = 1
-    EOS_IDX = 2
-    SEP_IDX = 4
-
-    return tokenizer, PAD_IDX, SOS_IDX, EOS_IDX, SEP_IDX
+        return src, tgt, src_pad_mask, tgt_pad_mask
 
 
 def load_data(data_cfg: dict):
-    tokenizer, PAD_IDX, SOS_IDX, EOS_IDX, SEP_IDX = build_tokenizer(data_cfg)
+    SOS_IDX = 0
+    EOS_IDX = 1
+    PAD_IDX = 2
 
-    dataset = ASAPDataset(data_cfg, tokenizer, SOS_IDX, EOS_IDX, PAD_IDX, SEP_IDX)
+    dataset = ASAPDataset(data_cfg, SOS_IDX, EOS_IDX, PAD_IDX)
 
     # Create splits
     indices = list(range(len(dataset)))
@@ -146,4 +110,4 @@ def load_data(data_cfg: dict):
     val_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SequentialSampler(val_indices), collate_fn=PadCollate(PAD_IDX))
     test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=SequentialSampler(test_indices), collate_fn=PadCollate(PAD_IDX))
 
-    return train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX
+    return train_loader, val_loader, test_loader, PAD_IDX, SOS_IDX, EOS_IDX

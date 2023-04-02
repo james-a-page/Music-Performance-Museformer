@@ -7,6 +7,7 @@ import pandas as pd
 from utils import load_config
 from preprocess import MIDI_to_encoding
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 
 def evaluate(cfg_file):
@@ -18,15 +19,21 @@ def evaluate(cfg_file):
     data = pd.read_csv(metadata_path)
     data = data[['midi_score']]
 
-    total_tokens_len = 0
+    all_bar_len = []
     for idx in tqdm(range(len(data))):
         midi_path = data.iloc[idx]['midi_score']
         midi = MidiFile(os.path.join(dataset_path, midi_path))
 
         tokens = MIDI_to_encoding(midi)
-        total_tokens_len += len(tokens)
+        tokens_flat = [j for i in tokens for j in i]
+        all_bar_len.append(len(tokens_flat))
 
-    print("Average example length: {}".format(total_tokens_len / len(data)))
+    plt.hist(all_bar_len)
+    plt.savefig("dummy_name.png")
+
+
+    #print("Estimated no. tokens: {}".format(max_token_idx))
+    #print("Average example length: {}".format(total_tokens_len / len(data)))
 
 
 if __name__ == "__main__":
