@@ -11,7 +11,6 @@ from models.model.encoder import Encoder
 
 from models.mask_utils import *
 
-import torchshow as ts
 
 class Transformer(nn.Module):
     def __init__(
