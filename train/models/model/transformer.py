@@ -8,22 +8,22 @@ from torch import nn
 
 from models.model.decoder import Decoder
 from models.model.encoder import Encoder
+from models.embedding.octuple_embedding import OctupleEmbedding
 
 
 class Transformer(nn.Module):
 
-    def __init__(self, cfg, vocab_size, SOS_IDX, PAD_IDX, device):
+    def __init__(self, cfg, SOS_IDX, PAD_IDX, device):
         super().__init__()
         self.src_pad_idx = PAD_IDX
         self.trg_pad_idx = PAD_IDX
         self.trg_sos_idx = SOS_IDX
-        self.vocab_size = vocab_size
         self.device = device
+
         self.encoder = Encoder(d_model=cfg.get("d_model"),
                                n_head=cfg.get("n_head"),
                                max_len=cfg.get("max_len"),
                                ffn_hidden=cfg.get("ffn_hidden"),
-                               enc_voc_size=vocab_size,
                                drop_prob=cfg.get("drop_prob"),
                                n_layers=cfg.get("n_layers"),
                                bayes_compression=cfg.get("bayes_compression"),
@@ -31,9 +31,8 @@ class Transformer(nn.Module):
 
         self.decoder = Decoder(d_model=cfg.get("d_model"),
                                n_head=cfg.get("n_head"),
-                               max_len=cfg.get("max_len"),
+                               embedding_sizes=cfg["embedding_sizes"],
                                ffn_hidden=cfg.get("ffn_hidden"),
-                               dec_voc_size=vocab_size,
                                drop_prob=cfg.get("drop_prob"),
                                n_layers=cfg.get("n_layers"),
                                bayes_compression=cfg.get("bayes_compression"),
@@ -42,28 +41,38 @@ class Transformer(nn.Module):
         # Components including kl_divergence
         self.kl_list = [self.encoder, self.decoder]
 
-    def forward(self, src, trg):
-        src_mask = self.make_pad_mask(src, src, self.src_pad_idx, self.src_pad_idx)
-        src_trg_mask = self.make_pad_mask(trg, src, self.trg_pad_idx, self.src_pad_idx)
+        self.emb = OctupleEmbedding(embedding_sizes=cfg["embedding_sizes"],
+                                    d_model=cfg.get("d_model"),
+                                    max_len=cfg.get("max_len"),
+                                    drop_prob=cfg.get("drop_prob"),
+                                    PAD_IDX=PAD_IDX,
+                                    device=device)
+
+    def forward(self, src, tgt, src_pad_mask, tgt_pad_mask):
+        src = self.emb(src)
+        tgt = self.emb(tgt)
+
+        src_mask = self.make_pad_mask(src_pad_mask, src_pad_mask)
+        src_trg_mask = self.make_pad_mask(tgt_pad_mask, src_pad_mask)
         
 
-        trg_mask = self.make_pad_mask(trg, trg, self.trg_pad_idx, self.trg_pad_idx) * \
-                   self.make_no_peak_mask(trg, trg)
+        trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
+                   self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
 
         enc_src = self.encoder(src, src_mask)
-        output = self.decoder(trg, enc_src, trg_mask, src_trg_mask)
+        output = self.decoder(tgt, enc_src, trg_mask, src_trg_mask)
         return output
 
-    def make_pad_mask(self, q, k, q_pad_idx, k_pad_idx):
+    def make_pad_mask(self, q, k):
         len_q, len_k = q.size(1), k.size(1)
 
         # batch_size x 1 x 1 x len_k
-        k = k.ne(k_pad_idx).unsqueeze(1).unsqueeze(2)
+        k = k.unsqueeze(1).unsqueeze(2)
         # batch_size x 1 x len_q x len_k
         k = k.repeat(1, 1, len_q, 1)
 
         # batch_size x 1 x len_q x 1
-        q = q.ne(q_pad_idx).unsqueeze(1).unsqueeze(3)
+        q = q.unsqueeze(1).unsqueeze(3)
         # batch_size x 1 x len_q x len_k
         q = q.repeat(1, 1, 1, len_k)
 

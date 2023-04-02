@@ -8,10 +8,10 @@ data:
   metadata_path: "data/asap/dataset/metadata.csv"
   new_tokens_dir: "data/asap/vocab"
   dataset_save_path: "data/asap/dataset/dataset.csv"
-  max_example_len: 25000
+  max_example_len: 6000
   shuffle: True
   dataset_split: [.8, .1, .1]
-  batch_size: 1
+  batch_size: 2
 training:
   epochs: 500000
   save: True
@@ -23,12 +23,13 @@ training:
   decode_dir: "./decoded/"
 eval:
   load_path: "models/encoder_decoder_base/model_epoch_28.pt"
-transformer:
+transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
+  embedding_sizes: [1027, 131, 4, 131, 131, 36, 257, 52]  # TODO remove instrument, since all piano
   d_model: 512
   n_head: 8
-  max_len: 25000
+  max_len: 10000
   ffn_hidden: 2048  # 2048
   drop_prob: 0.1
-  n_layers: 6 # 6
+  n_layers: 4 # 6
   lr: 1e-5
-  bayes_compression: True
+  bayes_compression: False
