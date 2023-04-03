@@ -7,7 +7,6 @@ import numpy as np
 from remi_edit import REMI
 from musicxmlannotations import genannotations
 from miditok import Event
-from utils import generate_tokens
 from tqdm import tqdm
 from miditoolkit import MidiFile
 from preprocess import MIDI_to_encoding
@@ -31,8 +30,41 @@ class ASAPDataset(Dataset):
         self.PAD_IDX = PAD_IDX
 
         # Build data
-        self.data = pd.read_csv(self.metadata_path)[['midi_score', 'midi_performance']]
-        self.data.to_csv(self.dataset_save_path, index=False)
+        #self.data = pd.read_csv(self.metadata_path)[['midi_score', 'midi_performance']]
+       # self.data.to_csv(self.dataset_save_path, index=False)
+
+        self.data = self._build_dataset()
+
+    def _build_dataset(self):
+        """
+        Input, all robotic bars + idxs of most similar bars to tgt
+        Target, single tgt bar
+        """
+        if os.path.exists(self.dataset_save_path):
+            return pd.read_csv(self.dataset_save_path)
+        else:
+            print("Building dataset")
+            data = pd.read_csv(self.metadata_path)
+            data = data[['midi_score', 'midi_performance']]
+
+            long_examples = []
+            for idx in tqdm(range(len(data))):
+                if idx > 30:
+                    long_examples.append(idx)
+                    continue
+                
+                src_path, tgt_path = data.iloc[idx]
+
+                src = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, src_path)))
+                tgt = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, tgt_path)))
+
+                if len(src) + 2 > self.max_example_len or len(tgt) + 2 > self.max_example_len:  # + 2 for SOS and EOS tokens
+                    long_examples.append(idx)
+                    continue
+
+            data = data.drop(long_examples).reset_index(drop=True)
+            data.to_csv(self.dataset_save_path, index=False)
+            return data
 
 
     def __len__(self):

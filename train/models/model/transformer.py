@@ -54,7 +54,6 @@ class Transformer(nn.Module):
 
         src_mask = self.make_pad_mask(src_pad_mask, src_pad_mask)
         src_trg_mask = self.make_pad_mask(tgt_pad_mask, src_pad_mask)
-        
 
         trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                    self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
