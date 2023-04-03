@@ -23,11 +23,13 @@ class DecoderLayer(nn.Module):
                                                        embed_dimension=d_model,
                                                        bias=False,
                                                        is_causal=True,
-                                                       training=True)  # TODO change during inferance
+                                                       training=True,  # TODO change during inferance
+                                                       bayes_compression=bayes_compression)  
         self.fast_cross_attention = CrossAttention(num_heads=n_head,
                                                    embed_dimension=d_model,
                                                    bias=False,
-                                                   training=True)  # TODO change during inferance
+                                                   training=True,  # TODO change during inferance
+                                                   bayes_compression=bayes_compression)  
 
         self.enc_dec_attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
         self.norm2 = LayerNorm(d_model=d_model)
@@ -38,7 +40,7 @@ class DecoderLayer(nn.Module):
         self.dropout3 = nn.Dropout(p=drop_prob)
 
         # layers including kl_divergence
-        self.kl_list = [self.ffn]
+        self.kl_list = [self.ffn, self.fast_self_attention, self.fast_cross_attention]
 
     def forward(self, dec, enc, t_mask, s_mask):
         # 1. compute self attention
