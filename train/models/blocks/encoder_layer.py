@@ -23,14 +23,15 @@ class EncoderLayer(nn.Module):
                                                        embed_dimension=d_model,
                                                        bias=False,
                                                        is_causal=False,
-                                                       training=True)
+                                                       training=True,
+                                                       bayes_compression=bayes_compression)
 
         self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob, bayes_compression=bayes_compression)
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(p=drop_prob)
 
         # layers including kl_divergence
-        self.kl_list = [self.ffn]
+        self.kl_list = [self.ffn, self.fast_self_attention]
 
     def forward(self, x, s_mask):
         # 1. compute self attention

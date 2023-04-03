@@ -30,9 +30,6 @@ class ASAPDataset(Dataset):
         self.PAD_IDX = PAD_IDX
 
         # Build data
-        #self.data = pd.read_csv(self.metadata_path)[['midi_score', 'midi_performance']]
-       # self.data.to_csv(self.dataset_save_path, index=False)
-
         self.data = self._build_dataset()
 
     def _build_dataset(self):

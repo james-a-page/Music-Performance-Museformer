@@ -22,7 +22,7 @@ training:
   decode_every: 10
   decode_dir: "./decoded/"
 eval:
-  load_path: "./saved_models/model_epoch_260.pt"
+  load_path: "./saved_models/model_epoch_580.pt"
 transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   embedding_sizes: [1027, 131, 4, 131, 131, 36, 257, 52]  # TODO remove instrument, since all piano
   d_model: 512
@@ -32,4 +32,4 @@ transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   drop_prob: 0.1
   n_layers: 6 # 6
   lr: 1e-5
-  bayes_compression: False
+  bayes_compression: True

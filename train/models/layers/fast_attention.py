@@ -1,18 +1,26 @@
 from torch import nn
 import torch.nn.functional as F
+from models.layers.BayesianLayers import LinearGroupNJ
 
 
 class CrossAttention(nn.Module):
 
-    def __init__(self, num_heads: int, embed_dimension: int, bias: bool=False, dropout:float=0.0, training: bool=False):
+    def __init__(self, num_heads: int, embed_dimension: int, bias: bool=False, dropout:float=0.0, training: bool=False, bayes_compression: bool=False):
         super().__init__()
         assert embed_dimension % num_heads == 0
         # key, query, value projections for all heads, but in a batch
-        self.w_q = nn.Linear(embed_dimension, embed_dimension, bias=bias)
-        self.w_k = nn.Linear(embed_dimension, embed_dimension, bias=bias)
-        self.w_v = nn.Linear(embed_dimension, embed_dimension, bias=bias)
-        # output projection
-        self.c_proj = nn.Linear(embed_dimension, embed_dimension, bias=bias)
+        if bayes_compression:
+            self.w_q = LinearGroupNJ(embed_dimension, embed_dimension, cuda=True)
+            self.w_k = LinearGroupNJ(embed_dimension, embed_dimension, cuda=True)
+            self.w_v = LinearGroupNJ(embed_dimension, embed_dimension, cuda=True)
+            self.c_proj = LinearGroupNJ(embed_dimension, embed_dimension, cuda=True)
+
+            self.kl_list = [self.w_q, self.w_k, self.w_v, self.c_proj]
+        else:
+            self.w_q = nn.Linear(embed_dimension, embed_dimension, bias=bias)
+            self.w_k = nn.Linear(embed_dimension, embed_dimension, bias=bias)
+            self.w_v = nn.Linear(embed_dimension, embed_dimension, bias=bias)
+            self.c_proj = nn.Linear(embed_dimension, embed_dimension, bias=bias)
         # regularization
         self.dropout = dropout
         self.resid_dropout = nn.Dropout(dropout)
@@ -44,16 +52,28 @@ class CrossAttention(nn.Module):
 
         return y
 
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.kl_list:
+            KLD += layer.kl_divergence()
+        return KLD
+
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, num_heads: int, embed_dimension: int, bias: bool=False, is_causal: bool=False, dropout:float=0.0, training: bool=False):
+    def __init__(self, num_heads: int, embed_dimension: int, bias: bool=False, is_causal: bool=False, dropout:float=0.0, training: bool=False, bayes_compression: bool=False):
         super().__init__()
         assert embed_dimension % num_heads == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(embed_dimension, 3 * embed_dimension, bias=bias)
-        # output projection
-        self.c_proj = nn.Linear(embed_dimension, embed_dimension, bias=bias)
+        if bayes_compression:
+            self.c_attn = LinearGroupNJ(embed_dimension, 3 * embed_dimension, cuda=True)
+            # output projection
+            self.c_proj = LinearGroupNJ(embed_dimension, embed_dimension, cuda=True)
+            self.kl_list = [self.c_attn, self.c_proj]
+        else:
+            self.c_attn = nn.Linear(embed_dimension, 3 * embed_dimension, bias=bias)
+            # output projection
+            self.c_proj = nn.Linear(embed_dimension, embed_dimension, bias=bias)
         # regularization
         self.dropout = dropout
         self.resid_dropout = nn.Dropout(dropout)
@@ -88,3 +108,9 @@ class CausalSelfAttention(nn.Module):
 
         y = self.resid_dropout(self.c_proj(y))
         return y
+
+    def _kl_divergence(self):
+        KLD = 0
+        for layer in self.kl_list:
+            KLD += layer.kl_divergence()
+        return KLD
