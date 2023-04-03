@@ -5,10 +5,9 @@ import random
 import yaml
 
 from remi_edit import REMI
-from miditok import Vocabulary, Event
-from miditoolkit import MidiFile
 import numpy as np
 from tqdm import tqdm
+from preprocess import encoding_to_MIDI
 
 import torch
 
@@ -54,125 +53,70 @@ def create_mask(tgt, device, PAD_IDX):
     return tgt_mask, tgt_padding_mask
 
 
-def greedy_decode(file_path, model, tokenizer, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device):
+def revert_example(example):
+    out = []
+    for b in example:
+        new_b = []
+        for n in b:
+            if (n - 3) < 0:
+                break
+
+            new_b.append(n - 3)
+
+        if len(new_b) == 8:
+            out.append(new_b)
+
+    return out
+
+
+def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device):
     """
     Decode single example from test dataloader greedily
     """
-    decoded_tokens = [SOS_IDX]
+    tgt_input = [[[SOS_IDX, SOS_IDX, SOS_IDX, SOS_IDX, SOS_IDX, SOS_IDX, SOS_IDX, SOS_IDX]]]
+    tgt_input = torch.tensor(tgt_input).to(device).cuda()
 
-    tgt = next(iter(test_loader))
-    tgt = tgt.to(device).cuda()
+    # Get example
+    batch = next(iter(test_loader))
+    src, tgt, src_pad_mask, _ = batch
+    
+    src, tgt, src_pad_mask = src[0].unsqueeze(0).to(device).cuda(), tgt[0].unsqueeze(0).to(device).cuda(), \
+                             src_pad_mask[0].unsqueeze(0).to(device).cuda()
 
-    input_tokens = torch.tensor([[SOS_IDX]]).cuda()
+    # TODO EOS
     with torch.no_grad():
         for i in tqdm(range(200)):
+            tgt_pad_mask = torch.ones((1, tgt_input.shape[0]), dtype=torch.int64).to(device).cuda()
 
-            #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
-            logits = model(None, input_tokens)
+            outputs = model(src, tgt_input, src_pad_mask, tgt_pad_mask)
 
-            logits = logits[:, logits.shape[1]-1, :]
-            top_token = torch.argmax(logits).item()
+            # Decode
+            decoded_example = []
+            for out in outputs:
+                final_out = out[:, out.shape[1]-1, :]
+                top_token = torch.argmax(final_out).item()
 
-            if top_token == EOS_IDX:
-                break
-
-            decoded_tokens.append(top_token)
-            input_tokens = torch.cat((input_tokens, torch.tensor([[top_token]]).cuda()), dim=1)
+                decoded_example.append(top_token)
+                
+            # Add decoded to next input
+            decoded_example = torch.tensor(decoded_example).unsqueeze(-2).unsqueeze(-2).to(device).cuda()
+            tgt_input = torch.concatenate((tgt_input, decoded_example), dim=1)
 
     # Dump to midi
-    tgt_midi = tokenizer.tokens_to_midi(tgt.tolist(), [(0, False)])
-    tgt_midi.dump('{:}_tgt.mid'.format(file_path))
+    src = revert_example(src.tolist()[0])
+    midi = encoding_to_MIDI(src)
+    midi.dump("{}_src.mid".format(file_path))
 
-    gen_midi = tokenizer.tokens_to_midi([decoded_tokens], [(0, False)])
-    gen_midi.dump('{:}_gen.mid'.format(file_path))
+    tgt = revert_example(tgt.tolist()[0])
+    midi = encoding_to_MIDI(tgt)
+    midi.dump("{}_tgt.mid".format(file_path))
+    
+    decoded_tokens_list = tgt_input.detach().tolist()[0]
+    decoded_tokens_list_rev = revert_example(decoded_tokens_list)
+    if len(decoded_tokens_list_rev) == 0:
+        return decoded_tokens_list
 
-    return decoded_tokens
+    midi = encoding_to_MIDI(decoded_tokens_list_rev)
+    midi.dump("{}_gen.mid".format(file_path))
 
-
-def generate_tokens(
-        tokenizer,
-        midi_path: str,
-        instructions: List[Tuple[int, str]]) -> List[Tuple[int, Token_List]]:
-    """
-    Reads a MIDI path and a list of instructions to be applied at each bar and returns a list of tokens representing the MIDI and the instructions at each bar.
-    """
-    midi = MidiFile(midi_path)
-
-    all_instructions = set([instruction for (_, instruction) in instructions])
-    """
-    for instruction in all_instructions:
-        if instruction not in tokenizer.vocab._event_to_token:
-            tokenizer.vocab.add_event(Event("Instruction", instruction, time=0, desc="Instruct_"+instruction))"""
-
-    instruct_timeline = generate_instructions_timeline(
-        instruction_list=instructions, tokenizer=tokenizer)
-    tokens = tokenizer(midi)
-    new_tokens = insert_instructions(tokens, instruct_timeline,
-                                     tokenizer.vocab)
-    return new_tokens
-
-
-def timestamp_to_bar_range(midi: MidiFile, section: Tuple[int, int]):
-    """ TODO
-    (mainly needed for user inputs rather than training data)
-    Determine the bars a section covers, based on the timestamp pointers.
-    """
-    pass
-
-
-def generate_instructions_timeline(
-        instruction_list: List[Tuple[int, str]], tokenizer: REMI) -> Dict[int, List[str]]:
-    """
-    (Maybe add track pointer as well as bar pointer?)
-    Takes a list of bar numbers and an instructions and combines into a dictionary of bar numbers and instruction events at that bar.
-    """
-    instruction_list = [
-        (n,
-         Event("Instruction",
-               instruction,
-               time=0,
-               desc="An instruction indicator indicating playing under the " +
-               instruction + " annotation."))
-        for (n, instruction) in instruction_list
-    ]
-
-    timeline = collections.defaultdict(list)
-    for a, b in instruction_list:
-        if b.value != '':
-            timeline[a].extend(tokenizer.events_to_tokens([b]))
-    return dict(timeline)
-
-
-def insert_instructions(tokens: Token_List,
-                        instruction_timeline: Dict[int, List[str]],
-                        vocab: Vocabulary) -> Token_List:
-    """
-    Iterate over our tokenised midi, when we encounter a bar token, we insert our instruction tokens based on the instruction_timeline dictionary
-    """
-    bar_count = -1
-    for j, token in enumerate(tokens):
-        if vocab.token_type(token) == "Bar":
-            bar_count += 1  #move depending how we are indexing bars?
-            if bar_count in instruction_timeline:
-                for elem in instruction_timeline[bar_count]:
-                    tokens.insert(j+1, elem)
-                    j += 1
-    return tokens
-
-
-def remove_meta_tokens(token_sequence: Token_List,
-                       vocab: Vocabulary) -> Token_List:
-    """
-    Iterates over token sequence removing any instruction tokens from the sequence to clean for MIDI reconstruction
-    """
-    for j, token in enumerate(token_sequence):
-        if vocab.token_type(token) == "Instruction":
-            token_sequence.pop(j)
-    return token_sequence
-
-
-def tokens_to_midi(tokenizer: REMI, token_sequence: Token_List) -> MidiFile:
-    """
-    Takes tokens and parses back into a MIDI object.
-    """
-    return tokenizer.tokens_to_midi([token_sequence])
+    return decoded_tokens_list

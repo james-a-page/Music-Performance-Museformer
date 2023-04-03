@@ -6,7 +6,6 @@ from dataset import load_data
 from utils import set_seed, load_config, greedy_decode, create_mask
 from models.model.transformer import Transformer
 from tqdm import tqdm
-from model import Seq2SeqTransformer
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -32,9 +31,9 @@ def train(cfg_file):
     # Set the random seed
     set_seed(seed=cfg["generic"].get("seed"))
 
-    train_loader, val_loader, test_loader, tokenizer, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
+    train_loader, val_loader, test_loader, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
 
-    model = Transformer(cfg["transformer"], len(tokenizer.vocab._token_to_event), SOS_IDX, PAD_IDX, device).to(device)
+    model = Transformer(cfg["transformer"], SOS_IDX, PAD_IDX, device).to(device)
     if cfg["training"].get("load"):
         model.load_state_dict(torch.load(cfg["eval"].get("load_path")))
     else:
@@ -66,24 +65,27 @@ def train(cfg_file):
 
         model.train()
         for batch_idx, batch in tqdm(enumerate(train_loader)):
-            tgt = batch
-            tgt = tgt.to(device).cuda()
+            src, tgt, src_pad_mask, tgt_pad_mask = batch
+            src, tgt, src_pad_mask, tgt_pad_mask = src.to(device).cuda(), tgt.to(device).cuda(), \
+                                                   src_pad_mask.to(device).cuda(), tgt_pad_mask.to(device).cuda()
 
             tgt_input = tgt[:, :-1] # Remove last EOS
             tgt_output = tgt[:, 1:]  # Remove first SOS
             
-            #logits = model(None, tgt_input.cuda())
-
-            #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
-            logits = model(None, tgt_input)
+            outputs = model(src, tgt_input, src_pad_mask, tgt_pad_mask)
 
             optimizer.zero_grad()
+            loss = 0
+            for idx, out in enumerate(outputs):
+                # Flatten
+                tgt_output_tok = tgt_output[:, :, idx].reshape(-1)
+                out_reshaped = out.reshape(-1, out.shape[-1])
 
-            if cfg["transformer"].get("bayes_compression"):
-                KLD = model._kl_divergence()
-                loss = objective(criterion, logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1), KLD)
-            else:
-                loss = criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1))
+                if cfg["transformer"].get("bayes_compression"):
+                    KLD = model._kl_divergence()
+                    loss += objective(criterion, out_reshaped, tgt_output_tok, KLD)
+                else:
+                    loss += criterion(out_reshaped, tgt_output_tok)
 
             loss.backward()
 
@@ -96,7 +98,7 @@ def train(cfg_file):
         # Decode example
         if decode and epoch % decode_every == 0:
             file_path = os.path.join(decode_dir, str(epoch))
-            tokens = greedy_decode(file_path, model, tokenizer, test_loader, SOS_IDX, EOS_IDX, device)
+            tokens = greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device)
             writer.add_text('Decoded/train', str(tokens), global_step)
 
         # Validation loop
@@ -104,22 +106,25 @@ def train(cfg_file):
         val_loss = 0
         for batch_idx, batch in tqdm(enumerate(val_loader)):
             with torch.no_grad():
-                tgt = batch
-                tgt = tgt.to(device).cuda()
+                src, tgt, src_pad_mask, tgt_pad_mask = batch
+                src, tgt, src_pad_mask, tgt_pad_mask = src.to(device).cuda(), tgt.to(device).cuda(), \
+                                                    src_pad_mask.to(device).cuda(), tgt_pad_mask.to(device).cuda()
 
                 tgt_input = tgt[:, :-1] # Remove last EOS
                 tgt_output = tgt[:, 1:]  # Remove first SOS
 
-                #logits = model(None, tgt_input.cuda())
+                outputs = model(src, tgt_input, src_pad_mask, tgt_pad_mask)
 
-                #tgt_mask, tgt_padding_mask = create_mask(tgt_input, device, PAD_IDX)
-                logits = model(None, tgt_input)
+                for idx, out in enumerate(outputs):
+                    # Flatten
+                    tgt_output_tok = tgt_output[:, :, idx].reshape(-1)
+                    out_reshaped = out.reshape(-1, out.shape[-1])
 
-                if cfg["transformer"].get("bayes_compression"):
-                    KLD = model._kl_divergence()
-                    val_loss += objective(criterion, logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1), KLD).item()
-                else:
-                    val_loss += criterion(logits.reshape(-1, logits.shape[-1]), tgt_output.reshape(-1)).item()
+                    if cfg["transformer"].get("bayes_compression"):
+                        KLD = model._kl_divergence()
+                        val_loss += objective(criterion, out_reshaped, tgt_output_tok, KLD)
+                    else:
+                        val_loss += criterion(out_reshaped, tgt_output_tok)
 
         # Tensorboard
         avg_val_loss = val_loss / len(val_loader)
