@@ -1,5 +1,4 @@
 *.pyc
-dataset/
 data/*/vocab
 log
 saved_models/
