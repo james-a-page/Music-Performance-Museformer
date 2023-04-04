@@ -31,7 +31,7 @@ def train(cfg_file):
     # Set the random seed
     set_seed(seed=cfg["generic"].get("seed"))
 
-    train_loader, val_loader, test_loader, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"])
+    train_loader, val_loader, test_loader, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"], pretrain=cfg["training"].get("pretrain"))
 
     model = Transformer(cfg["transformer"], SOS_IDX, PAD_IDX, device).to(device)
     if cfg["training"].get("load"):

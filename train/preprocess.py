@@ -46,8 +46,8 @@ output_file = None
 lock_file = Lock()
 lock_write = Lock()
 lock_set = Lock()
-manager = Manager()
-midi_dict = manager.dict()
+# manager = Manager()
+# midi_dict = manager.dict()
 
 
 # (0 Measure, 1 Pos, 2 Program, 3 Pitch, 4 Duration, 5 Velocity, 6 TimeSig, 7 Tempo)

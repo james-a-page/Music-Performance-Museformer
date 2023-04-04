@@ -57,11 +57,14 @@ class Transformer(nn.Module):
         src_mask = self.make_pad_mask(src_pad_mask, src_pad_mask)
         src_trg_mask = self.make_pad_mask(tgt_pad_mask, src_pad_mask)
 
+        #TODO adapt to have summary tokens
         trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                    self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
 
         enc_src = self.encoder(src, src_mask)
         output = self.decoder(tgt, enc_src, trg_mask, src_trg_mask)
+        # output = self.decoder(tgt, torch.zeros_like(enc_src), trg_mask, src_trg_mask)
+# 
         return output
 
     def make_pad_mask(self, q, k):

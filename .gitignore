@@ -4,3 +4,5 @@ data/*/vocab
 log
 saved_models/
 decoded/
+*.score
+*.perf

@@ -18,12 +18,19 @@ from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 
 class ASAPDataset(Dataset):
-    def __init__(self, data_cfg, SOS_IDX, EOS_IDX, PAD_IDX):
-        self.dataset_path = data_cfg.get("dataset_path")
-        self.metadata_path = data_cfg.get("metadata_path")
-        self.new_tokens_dir = data_cfg.get("new_tokens_dir")
-        self.dataset_save_path = data_cfg.get("dataset_save_path")
-        self.max_example_len = data_cfg.get("max_example_len")
+    def __init__(self, data_cfg, pretrain, SOS_IDX, EOS_IDX, PAD_IDX):
+        if pretrain:
+            self.dataset_path = data_cfg.get("pretrain_dataset_path")
+            self.metadata_path = data_cfg.get("pretrain_metadata_path")
+            self.new_tokens_dir = data_cfg.get("pretrain_new_tokens_dir")
+            self.dataset_save_path = data_cfg.get("pretrain_dataset_save_path")
+            self.max_example_len = data_cfg.get("max_example_len") 
+        else:
+            self.dataset_path = data_cfg.get("dataset_path")
+            self.metadata_path = data_cfg.get("metadata_path")
+            self.new_tokens_dir = data_cfg.get("new_tokens_dir")
+            self.dataset_save_path = data_cfg.get("dataset_save_path")
+            self.max_example_len = data_cfg.get("max_example_len")
 
         self.SOS_IDX = SOS_IDX
         self.EOS_IDX = EOS_IDX
@@ -119,12 +126,15 @@ class PadCollate:
         return src, tgt, src_pad_mask, tgt_pad_mask
 
 
-def load_data(data_cfg: dict):
+def load_data(data_cfg: dict, pretrain: bool):
     SOS_IDX = 0
     EOS_IDX = 1
     PAD_IDX = 2
 
-    dataset = ASAPDataset(data_cfg, SOS_IDX, EOS_IDX, PAD_IDX)
+    if pretrain:
+        dataset = ASAPDataset(data_cfg, pretrain, SOS_IDX, EOS_IDX, PAD_IDX)
+    else:
+        dataset = ASAPDataset(data_cfg, pretrain, SOS_IDX, EOS_IDX, PAD_IDX)
 
     # Create splits
     indices = list(range(len(dataset)))
