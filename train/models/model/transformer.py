@@ -15,12 +15,13 @@ from models.mask_utils import get_bar_locations
 
 class Transformer(nn.Module):
 
-    def __init__(self, cfg, SOS_IDX, PAD_IDX, device):
+    def __init__(self, cfg, pretrain, SOS_IDX, PAD_IDX, device):
         super().__init__()
         self.src_pad_idx = PAD_IDX
         self.trg_pad_idx = PAD_IDX
         self.trg_sos_idx = SOS_IDX
         self.device = device
+        self.pretrain = pretrain
 
         self.encoder = Encoder(d_model=cfg.get("d_model"),
                                n_head=cfg.get("n_head"),
@@ -57,13 +58,15 @@ class Transformer(nn.Module):
         src_mask = self.make_pad_mask(src_pad_mask, src_pad_mask)
         src_trg_mask = self.make_pad_mask(tgt_pad_mask, src_pad_mask)
 
-        #TODO adapt to have summary tokens
+        #TODO adapt to for museformer
         trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                    self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
 
         enc_src = self.encoder(src, src_mask)
-        output = self.decoder(tgt, enc_src, trg_mask, src_trg_mask)
-        # output = self.decoder(tgt, torch.zeros_like(enc_src), trg_mask, src_trg_mask)
+        if self.pretrain:
+            output = self.decoder(tgt, None, trg_mask, src_trg_mask)
+        else:
+            output = self.decoder(tgt, enc_src, trg_mask, src_trg_mask)
 # 
         return output
 

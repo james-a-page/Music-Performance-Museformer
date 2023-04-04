@@ -21,20 +21,20 @@ training:
   epochs: 500000
   save: True
   save_every: 20
-  save_dir: "G:\\saved_models\\"
+  save_dir: "./saved_models/"
   load: False
   decode: True
   decode_every: 10
   decode_dir: "./decoded/"
 eval:
-  load_path: "G:\\saved_models\\model_epoch_100.pt"
+  load_path: "./saved_models/model_epoch_260.pt"
 transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   embedding_sizes: [1027, 131, 4, 131, 131, 36, 257, 52]  # TODO remove instrument, since all piano
   d_model: 512
   n_head: 8
   max_len: 8500
   ffn_hidden: 2048  # 2048
-  drop_prob: 0.25
-  n_layers: 4 # 6
+  drop_prob: 0.1
+  n_layers: 6 # 6
   lr: 1e-5
-  bayes_compression: True
+  bayes_compression: False
