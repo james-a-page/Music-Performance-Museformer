@@ -86,12 +86,11 @@ class ASAPDataset(Dataset):
         output += [[0, 0, 0, 0, 0, 0, 0, 0]]  # SOS_IDX
 
         for b, bar in enumerate(tokens): 
-            if b in bar_positions:
-                bar_marker = [3, 3, 3, 3, 3, 3, 3, 3]
             #Increased shift to 4, to allow an extra bar indicator to be inserted.
             bar_shifted = [i + 4 for i in bar]
             output += [bar_shifted]
-            output += [bar_marker]
+            if b in bar_positions: 
+                output += [[3, 3, 3, 3, 3, 3, 3, 3]]
 
 
         output += [[1, 1, 1, 1, 1, 1, 1, 1]]  # EOS_IDX

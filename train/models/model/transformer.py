@@ -22,6 +22,7 @@ class Transformer(nn.Module):
         self.trg_sos_idx = SOS_IDX
         self.device = device
         self.pretrain = pretrain
+        self.attention_method = "museformer"
 
         self.encoder = Encoder(d_model=cfg.get("d_model"),
                                n_head=cfg.get("n_head"),
@@ -53,17 +54,19 @@ class Transformer(nn.Module):
 
     def forward(self, src, tgt, src_pad_mask, tgt_pad_mask):
         #Find bar postionts before embedding
-        print(src)
-        raise SyntaxError("")
+        tgt_bar_positions = [i for i,tok in enumerate(tgt[0]) if torch.equal(tok, torch.Tensor([3, 3, 3, 3, 3, 3, 3, 3]).to(self.device))]
         src = self.emb(src)
         tgt = self.emb(tgt)
 
         src_mask = self.make_pad_mask(src_pad_mask, src_pad_mask)
         src_trg_mask = self.make_pad_mask(tgt_pad_mask, src_pad_mask)
 
-        #TODO adapt to for museformer
-        trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
-                   self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
+        if self.attention_method == "museformer":
+            trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
+                    self.make_museformer_mask(tgt_pad_mask, tgt_pad_mask, tgt_bar_positions)
+        else:
+            trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
+                    self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
 
         enc_src = self.encoder(src, src_mask)
         if self.pretrain:
@@ -128,49 +131,50 @@ class Transformer(nn.Module):
         self,
         q,
         k,
-        q_bar_idx,
-        k_bar_idx,
+        summary_positon,
         struct_related_bars=[2, 4, 8, 16, 32],
-        use_eos_as_summary=True,
+        use_eos_as_summary=False,
         EOS_idx=3,
     ):
         len_q, len_k = q.size(1), k.size(1)
 
-        # First split sequence into bars by the bar token
-        if use_eos_as_summary:
-            summary_idx = [q_bar_idx, EOS_idx]
-        else:
-            summary_idx = [q_bar_idx]
-        q_bar_pointers = get_bar_locations(q, summary_idx)
-
+        # len_q x len_k
         tri_mask = (
             torch.tril(torch.ones(len_q, len_k)).type(torch.BoolTensor).to(self.device)
         )
-
         museformer_mask = torch.zeros_like(tri_mask).to(self.device)
 
-        bar_count = -1
+        bar_count = 0
 
         first_of_bar = False
 
         for i, mask in enumerate(tri_mask):
             temp_mask = torch.zeros_like(mask)
-            if q[0][i] == q_bar_idx or (use_eos_as_summary and q[0][i] == EOS_idx):
-                if bar_count != -1:
-                    temp_mask.index_fill_(0, torch.arange(q_bar_pointers[bar_count][0], i).to(self.device), 1)
-                    first_of_bar = True
+            if bar_count < len(summary_positon) and i == summary_positon[bar_count]:
+                if bar_count == 0:
+                    #First bar is all tokens from idx 1 -> summary_position[0]
+                    temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
+                else:
+                    #All other bars cover all tokens after the previous summary_positon idx to the current summary_positon idx
+                    temp_mask.index_fill_(0, torch.arange(summary_positon[bar_count - 1] + 1, i).to(self.device), 1)
+                first_of_bar = True
                 bar_count += 1
             else:
                 if bar_count > 0:
                     # unmask all but current bar and previous and then struct_related_bar tokens
-                    # Previous bar
+                    if bar_count == 1:
+                        prev_bar_start = 1
+                    else:
+                        prev_bar_start = summary_positon[bar_count - 2] + 1
+
                     if first_of_bar:
-                        temp_mask.index_fill_(0, torch.arange(q_bar_pointers[bar_count - 1][0], i).to(self.device), 1)
+                        # The previous bar but remove the summary token for that bar.
+                        temp_mask.index_fill_(0, torch.arange(prev_bar_start + 1, i).to(self.device), 1)
                         temp_mask[i-1] = False
                         # Struct_related_bar
                         for struct_bar in struct_related_bars:
                             if bar_count > struct_bar:
-                                temp_mask[q_bar_pointers[bar_count - struct_bar][1]] = True
+                                temp_mask[summary_positon[bar_count - struct_bar]] = True
                             else:
                                 break
                         first_of_bar = False
@@ -179,14 +183,13 @@ class Transformer(nn.Module):
                         temp_mask[i] = True
                 else:
                     # unmask all but current bar
-                    if bar_count >= 0:
-                        if first_of_bar:    
-                            temp_mask.index_fill_(0, torch.arange(q_bar_pointers[bar_count][0], i).to(self.device), 1)
-                            temp_mask[i-1] = False
-                            first_of_bar = False
-                        else:
-                            temp_mask = museformer_mask[i-1]
-                            temp_mask[i] = True
+                    if first_of_bar:    
+                        temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
+                        temp_mask[i-1] = False
+                        first_of_bar = False
+                    else:
+                        temp_mask = museformer_mask[i-1]
+                        temp_mask[i] = True
 
             museformer_mask[i] = temp_mask
         return museformer_mask
