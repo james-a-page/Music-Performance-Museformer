@@ -171,6 +171,7 @@ def gen_dictionary(file_name):
 def MIDI_to_encoding(midi_obj):
     def time_to_pos(t):
         return round(t * pos_resolution / midi_obj.ticks_per_beat)
+    bar_positions = []
     notes_start_pos = [time_to_pos(j.start)
                        for i in midi_obj.instruments for j in i.notes]
     if len(notes_start_pos) == 0:
@@ -210,6 +211,7 @@ def MIDI_to_encoding(midi_obj):
                 j)
             cnt -= measure_length
             bar += 1
+            bar_positions.append(j)
     encoding = []
     start_distribution = [0] * pos_resolution
     for inst in midi_obj.instruments:
@@ -230,7 +232,7 @@ def MIDI_to_encoding(midi_obj):
         assert start_ppl <= filter_symbolic_ppl, 'filtered out by the symbolic filter: ppl = {:.2f}'.format(
             start_ppl)
     encoding.sort()
-    return encoding
+    return encoding, bar_positions
 
 
 def encoding_to_MIDI(encoding):

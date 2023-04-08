@@ -52,6 +52,9 @@ class Transformer(nn.Module):
                                     device=device)
 
     def forward(self, src, tgt, src_pad_mask, tgt_pad_mask):
+        #Find bar postionts before embedding
+        print(src)
+        raise SyntaxError("")
         src = self.emb(src)
         tgt = self.emb(tgt)
 

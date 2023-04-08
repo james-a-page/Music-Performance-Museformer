@@ -81,13 +81,18 @@ class ASAPDataset(Dataset):
         return len(self.data)
 
 
-    def _construct_and_shift(self, tokens):
+    def _construct_and_shift(self, tokens, bar_positions):
         output = []
         output += [[0, 0, 0, 0, 0, 0, 0, 0]]  # SOS_IDX
 
-        for bar in tokens:
-            bar_shifted = [i + 3 for i in bar]
+        for b, bar in enumerate(tokens): 
+            if b in bar_positions:
+                bar_marker = [3, 3, 3, 3, 3, 3, 3, 3]
+            #Increased shift to 4, to allow an extra bar indicator to be inserted.
+            bar_shifted = [i + 4 for i in bar]
             output += [bar_shifted]
+            output += [bar_marker]
+
 
         output += [[1, 1, 1, 1, 1, 1, 1, 1]]  # EOS_IDX
         return output
@@ -96,11 +101,11 @@ class ASAPDataset(Dataset):
     def __getitem__(self, idx):
         src_path, tgt_path = self.data.iloc[idx]
 
-        src = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, src_path)))
-        src = self._construct_and_shift(src)
+        src, src_bar_positons = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, src_path)))
+        src = self._construct_and_shift(src, src_bar_positons)
 
-        tgt = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, tgt_path)))
-        tgt = self._construct_and_shift(tgt)
+        tgt, tgt_bar_positons = MIDI_to_encoding(MidiFile(os.path.join(self.dataset_path, tgt_path)))
+        tgt = self._construct_and_shift(tgt, tgt_bar_positons)
 
         return torch.tensor(src), torch.tensor(tgt)
 
