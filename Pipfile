@@ -5,22 +5,20 @@ name = "pypi"
 
 [packages]
 musicxmlannotations = {git = "https://github.com/ojaffe/MusicXMLAnnotations"}
-fairseq = "0.10.2"
 scipy = "*"
 matplotlib = "*"
 pandas = "*"
-torch = "*"
-miditok = "1.4.3"
+torch = *
+miditok = "==1.4.3"
 miditoolkit = "*"
 pyyaml = "*"
 tensorboard = "*"
 tensorboardX = "2.2"
 einops = "*"
-triton=="*"
-
 nvidia-ml-py3 = "*"
+
 
 [dev-packages]
 
 [requires]
-python_version = "3.8"
+python_version = "3.9"

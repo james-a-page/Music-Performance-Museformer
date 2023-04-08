@@ -33,7 +33,7 @@ def train(cfg_file):
 
     train_loader, val_loader, test_loader, PAD_IDX, SOS_IDX, EOS_IDX = load_data(data_cfg=cfg["data"], pretrain=cfg["training"].get("pretrain"))
 
-    model = Transformer(cfg["transformer"], SOS_IDX, PAD_IDX, device).to(device)
+    model = Transformer(cfg["transformer"], cfg["training"].get('pretrain'), SOS_IDX, PAD_IDX, device).to(device)
     if cfg["training"].get("load"):
         model.load_state_dict(torch.load(cfg["eval"].get("load_path")))
     else:
@@ -99,7 +99,10 @@ def train(cfg_file):
         if decode and epoch % decode_every == 0:
             file_path = os.path.join(decode_dir, str(epoch))
             tokens = greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device)
-            writer.add_text('Decoded/train', str(tokens), global_step)
+            if tokens is None:
+                writer.add_text('Decoded/train', "BadMidi", global_step)
+            else:
+                writer.add_text('Decoded/train', str(tokens), global_step)
 
         # Validation loop
         model.eval()

@@ -4,9 +4,9 @@ import pickle
 import pandas as pd
 import numpy as np
 
-from remi_edit import REMI
-from musicxmlannotations import genannotations
-from miditok import Event
+# from remi_edit import REMI
+# from musicxmlannotations import genannotations
+# from miditok import Event
 from tqdm import tqdm
 from miditoolkit import MidiFile
 from preprocess import MIDI_to_encoding
@@ -40,9 +40,9 @@ class ASAPDataset(Dataset):
         #self.data = pd.read_csv(self.metadata_path)[['midi_score', 'midi_performance']]
        # self.data.to_csv(self.dataset_save_path, index=False)
 
-        self.data = self._build_dataset()
+        self.data = self._build_dataset(pretrain=pretrain)
 
-    def _build_dataset(self):
+    def _build_dataset(self, pretrain):
         """
         Input, all robotic bars + idxs of most similar bars to tgt
         Target, single tgt bar
@@ -52,13 +52,16 @@ class ASAPDataset(Dataset):
         else:
             print("Building dataset")
             data = pd.read_csv(self.metadata_path)
-            data = data[['midi_score', 'midi_performance']]
+            if pretrain:
+                data = data[['midi_filename', 'midi_filename']]
+            else:
+                data = data[['midi_score', 'midi_performance']]
 
             long_examples = []
             for idx in tqdm(range(len(data))):
-                if idx > 30:
-                    long_examples.append(idx)
-                    continue
+                # if idx > 30:
+                #     long_examples.append(idx)
+                #     continue
                 
                 src_path, tgt_path = data.iloc[idx]
 

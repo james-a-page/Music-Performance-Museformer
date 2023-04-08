@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=museformer_train # Job name for tracking
+#SBATCH --job-name=performance-translation # Job name for tracking
 #SBATCH --partition=falcon # Partition you wish to use (see above for list)
 #SBATCH --cpus-per-task=6      # Number of CPU cores used by your job
 #SBATCH --mem=60000           # RAM in MB needed in total (also available --mem-per-cpu)
@@ -14,11 +14,12 @@
 . /etc/profile.d/modules.sh
 
 #Load and dump dataset, GPU not required
-python3 -m pipenv run python ./train/dump-dataset.py configs/asap.yaml
+#python3 -m pipenv run python ./train/dump-dataset.py configs/asap.yaml
+
 
 # Shell script for running the preprocessing step and the train step (only use if data-bin hasn't been populated previously or is using new data)
 # srun --nodelist="falcon-04" python3 -m pipenv run preprocess-train.sh
 
 # Run the fariseq-train step (assumes data-bin has been populated and all preprocessing is complete)
-srun --nodelist="falcon-04" python3 -m pipenv run train.sh
-# srun --nodelist="falcon-05" python3 -m pipenv run python ./train/train.py configs/asap.yaml
+#srun --nodelist="falcon-04" python3 -m pipenv run train.sh
+srun python3.9 ./train/train.py configs/asap.yaml

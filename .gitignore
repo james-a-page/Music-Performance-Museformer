@@ -1,4 +1,6 @@
 *.pyc
+*.mid
+*.midi
 dataset/
 data/*/vocab
 log
@@ -6,3 +8,6 @@ saved_models/
 decoded/
 *.score
 *.perf
+past*/
+error.err
+output.out

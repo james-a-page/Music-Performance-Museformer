@@ -4,7 +4,7 @@ import random
 
 import yaml
 
-from remi_edit import REMI
+# from remi_edit import REMI
 import numpy as np
 from tqdm import tqdm
 from preprocess import encoding_to_MIDI
@@ -115,8 +115,10 @@ def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, devi
     decoded_tokens_list_rev = revert_example(decoded_tokens_list)
     if len(decoded_tokens_list_rev) == 0:
         return decoded_tokens_list
-
-    midi = encoding_to_MIDI(decoded_tokens_list_rev)
-    midi.dump("{}_gen.mid".format(file_path))
-
+    try:
+        midi = encoding_to_MIDI(decoded_tokens_list_rev)
+        midi.dump("{}_gen.mid".format(file_path))
+    except:
+        print("Unparseable Generated Midi")
+        return None
     return decoded_tokens_list
