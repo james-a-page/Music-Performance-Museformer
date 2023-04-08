@@ -38,3 +38,4 @@ transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   n_layers: 6 # 6
   lr: 1e-5
   bayes_compression: False
+  bayes_compression: False
