@@ -175,7 +175,7 @@ def MIDI_to_encoding(midi_obj):
     notes_start_pos = [time_to_pos(j.start)
                        for i in midi_obj.instruments for j in i.notes]
     if len(notes_start_pos) == 0:
-        return list()
+        return list(), list()
     max_pos = min(max(notes_start_pos) + 1, trunc_pos)
     pos_to_info = [[None for _ in range(4)] for _ in range(
         max_pos)]  # (Measure, TimeSig, Pos, Tempo)
@@ -223,7 +223,7 @@ def MIDI_to_encoding(midi_obj):
             encoding.append((info[0], info[2], max_inst + 1 if inst.is_drum else inst.program, note.pitch + max_pitch +
                              1 if inst.is_drum else note.pitch, d2e(time_to_pos(note.end) - time_to_pos(note.start)), v2e(note.velocity), info[1], info[3]))
     if len(encoding) == 0:
-        return list()
+        return list(),list()
     tot = sum(start_distribution)
     start_ppl = 2 ** sum((0 if x == 0 else -(x / tot) *
                           math.log2((x / tot)) for x in start_distribution))

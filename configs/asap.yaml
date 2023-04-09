@@ -1,6 +1,6 @@
 name: asap
 generic:
-  seed: 42
+  seed: 1234
   log_dir: './log/'
   clear_log: True
 data:
@@ -20,21 +20,21 @@ training:
   pretrain: False
   epochs: 500000
   save: True
-  save_every: 5
+  save_every: 6
   save_dir: "./saved_models/"
-  load: False
+  load: True
   decode: True
   decode_every: 2
   decode_dir: "./decoded/"
 eval:
-  load_path: "./past_checkpoints/giantmidi-pretrain-l6-dr.3/model_epoch_30.pt"
+  load_path: "./past_checkpoints/giant-midi-musesformer-2/model_epoch_4.pt"
 transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
-  embedding_sizes: [1027, 131, 5, 131, 131, 36, 257, 52]  # TODO remove instrument, since all piano
+  embedding_sizes: [1028, 132, 5, 132, 132, 37, 258, 53]  # TODO remove instrument, since all piano
   d_model: 512
   n_head: 8
   max_len: 8500
   ffn_hidden: 2048  # 2048
-  drop_prob: 0.3
+  drop_prob: 0.45
   n_layers: 6 # 6
   lr: 1e-5
-  bayes_compression: False
+  bayes_compression: True

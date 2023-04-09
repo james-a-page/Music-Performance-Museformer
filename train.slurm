@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#SBATCH --job-name=performance-translation # Job name for tracking
+#SBATCH --job-name=gen-pretrain # Job name for tracking
 #SBATCH --partition=falcon # Partition you wish to use (see above for list)
 #SBATCH --cpus-per-task=6      # Number of CPU cores used by your job
 #SBATCH --mem=60000           # RAM in MB needed in total (also available --mem-per-cpu)
