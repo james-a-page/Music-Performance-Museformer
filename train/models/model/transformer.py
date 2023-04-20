@@ -168,8 +168,6 @@ class Transformer(nn.Module):
 
                     if first_of_bar:
                         # The previous bar but remove the summary token for that bar.
-                        # temp_mask.index_fill_(0, torch.arange(prev_bar_start + 1, i).to(self.device), 1)
-                        # temp_mask[i-1] = False
                         for p, pos in enumerate(summary_positon):
                             if p > bar_count:
                                 break
