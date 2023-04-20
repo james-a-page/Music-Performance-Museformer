@@ -13,13 +13,4 @@
 ## Execute your program(s) ##
 . /etc/profile.d/modules.sh
 
-#Load and dump dataset, GPU not required
-#python3 -m pipenv run python ./train/dump-dataset.py configs/asap.yaml
-
-
-# Shell script for running the preprocessing step and the train step (only use if data-bin hasn't been populated previously or is using new data)
-# srun --nodelist="falcon-04" python3 -m pipenv run preprocess-train.sh
-
-# Run the fariseq-train step (assumes data-bin has been populated and all preprocessing is complete)
-#srun --nodelist="falcon-04" python3 -m pipenv run train.sh
 srun python3.9 ./train/train.py configs/asap.yaml

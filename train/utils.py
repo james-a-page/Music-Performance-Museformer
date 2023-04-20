@@ -58,10 +58,10 @@ def revert_example(example):
     for b in example:
         new_b = []
         for n in b:
-            if (n - 3) < 0:
+            if (n - 4) < 0:
                 break
 
-            new_b.append(n - 3)
+            new_b.append(n - 4)
 
         if len(new_b) == 8:
             out.append(new_b)
@@ -85,7 +85,7 @@ def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, devi
 
     # TODO EOS
     with torch.no_grad():
-        for i in tqdm(range(200)):
+        for i in tqdm(range(400)):
             tgt_pad_mask = torch.ones((1, tgt_input.shape[0]), dtype=torch.int64).to(device).cuda()
 
             outputs = model(src, tgt_input, src_pad_mask, tgt_pad_mask)
