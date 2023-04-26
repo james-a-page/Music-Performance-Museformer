@@ -131,7 +131,7 @@ class Transformer(nn.Module):
         q,
         k,
         summary_positon,
-        struct_related_bars=[1, 2, 4, 8, 16, 32],
+        struct_related_bars=[1, 2, 4, 8],
         use_eos_as_summary=False,
         EOS_idx=3,
     ):

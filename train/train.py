@@ -97,8 +97,10 @@ def train(cfg_file):
 
         # Decode example
         if decode and epoch % decode_every == 0:
-            file_path = os.path.join(decode_dir, str(epoch))
-            tokens = greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device)
+            file_path = os.path.join(decode_dir, 'train_'+str(epoch))
+            tokens = greedy_decode(file_path, model, train_loader, PAD_IDX, SOS_IDX, EOS_IDX, device, save_src=(epoch==0))
+            file_path = os.path.join(decode_dir, 'test_'+str(epoch))
+            tokens = greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device, save_src=(epoch==0))
             if tokens is None:
                 writer.add_text('Decoded/train', "BadMidi", global_step)
             else:
