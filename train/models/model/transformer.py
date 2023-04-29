@@ -10,6 +10,8 @@ from models.model.decoder import Decoder
 from models.model.encoder import Encoder
 from models.embedding.octuple_embedding import OctupleEmbedding
 
+import torchshow as ts
+
 from models.mask_utils import get_bar_locations
 
 
@@ -64,6 +66,8 @@ class Transformer(nn.Module):
         if self.attention_method == "museformer":
             trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                     self.make_museformer_mask(tgt_pad_mask, tgt_pad_mask, tgt_bar_positions)
+            ts.show(trg_mask)
+            raise SyntaxError("")
         else:
             trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                     self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
@@ -141,109 +145,58 @@ class Transformer(nn.Module):
         tri_mask = (
             torch.tril(torch.ones(len_q, len_k)).type(torch.BoolTensor).to(self.device)
         )
-        museformer_mask = torch.zeros_like(tri_mask).to(self.device)
+        museformer_mask = torch.zeros_like(tri_mask,dtype=int).to(self.device)
 
         bar_count = 0
 
         first_of_bar = False
 
         for i, mask in enumerate(tri_mask):
-            temp_mask = torch.zeros_like(mask)
+            temp_mask = torch.zeros_like(mask, dtype=int)
             if bar_count < len(summary_positon) and i == summary_positon[bar_count]:
                 if bar_count == 0:
                     #First bar is all tokens from idx 1 -> summary_position[0]
-                    temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
+                    temp_mask.index_fill_(0, torch.arange(0, i).to(self.device), 4)
                 else:
                     #All other bars cover all tokens after the previous summary_positon idx to the current summary_positon idx
-                    temp_mask.index_fill_(0, torch.arange(summary_positon[bar_count - 1] + 1, i).to(self.device), 1)
+                    temp_mask.index_fill_(0, torch.arange(summary_positon[bar_count - 1] + 1, i).to(self.device), 4)
                 first_of_bar = True
                 bar_count += 1
             else:
                 if bar_count > 0:
                     # unmask all but current bar and previous and then struct_related_bar tokens
-                    if bar_count == 1:
-                        prev_bar_start = 1
-                    else:
-                        prev_bar_start = summary_positon[bar_count - 2] + 1
-
                     if first_of_bar:
                         # The previous bar but remove the summary token for that bar.
                         for p, pos in enumerate(summary_positon):
-                            if p > bar_count:
+                            if p >= bar_count:
                                 break
-                            if bar_count - p in struct_related_bars:
-                                temp_mask[pos] = True
+                            if bar_count - p not in struct_related_bars:
+                                temp_mask[pos] = 3
                         # Struct_related_bar
                         for struct_bar in struct_related_bars:
                             if bar_count > struct_bar:
                                 struct_bar_start = summary_positon[bar_count - struct_bar - 1] + 1
                                 struct_bar_end = summary_positon[bar_count - struct_bar] - 1
 
-                                temp_mask.index_fill_(0, torch.arange(struct_bar_start, struct_bar_end).to(self.device), 1)
+                                temp_mask.index_fill_(0, torch.arange(struct_bar_start, struct_bar_end).to(self.device), 2)
                             else:
                                 break
                         first_of_bar = False
                     else:
                         temp_mask = museformer_mask[i-1]
-                        temp_mask[i] = True
+                    temp_mask[i] = 1
                 else:
                     # unmask all but current bar
                     if first_of_bar:    
                         temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
-                        temp_mask[i-1] = False
+                        temp_mask[i-1] = 0
                         first_of_bar = False
                     else:
                         temp_mask = museformer_mask[i-1]
-                        temp_mask[i] = True
+                        temp_mask[i] = 1
 
             museformer_mask[i] = temp_mask
         return museformer_mask
-
-        # for i, mask in enumerate(tri_mask):
-        #     temp_mask = torch.zeros_like(mask)
-        #     if bar_count < len(summary_positon) and i == summary_positon[bar_count]:
-        #         if bar_count == 0:
-        #             #First bar is all tokens from idx 1 -> summary_position[0]
-        #             temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
-        #         else:
-        #             #All other bars cover all tokens after the previous summary_positon idx to the current summary_positon idx
-        #             temp_mask.index_fill_(0, torch.arange(summary_positon[bar_count - 1] + 1, i).to(self.device), 1)
-        #         first_of_bar = True
-        #         bar_count += 1
-        #     else:
-        #         if bar_count > 0:
-        #             # unmask all but current bar and previous and then struct_related_bar tokens
-        #             if bar_count == 1:
-        #                 prev_bar_start = 1
-        #             else:
-        #                 prev_bar_start = summary_positon[bar_count - 2] + 1
-
-        #             if first_of_bar:
-        #                 # The previous bar but remove the summary token for that bar.
-        #                 temp_mask.index_fill_(0, torch.arange(prev_bar_start + 1, i).to(self.device), 1)
-        #                 temp_mask[i-1] = False
-        #                 # Struct_related_bar
-        #                 for struct_bar in struct_related_bars:
-        #                     if bar_count > struct_bar:
-        #                         temp_mask[summary_positon[bar_count - struct_bar]] = True
-        #                     else:
-        #                         break
-        #                 first_of_bar = False
-        #             else:
-        #                 temp_mask = museformer_mask[i-1]
-        #                 temp_mask[i] = True
-        #         else:
-        #             # unmask all but current bar
-        #             if first_of_bar:    
-        #                 temp_mask.index_fill_(0, torch.arange(1, i).to(self.device), 1)
-        #                 temp_mask[i-1] = False
-        #                 first_of_bar = False
-        #             else:
-        #                 temp_mask = museformer_mask[i-1]
-        #                 temp_mask[i] = True
-
-        #     museformer_mask[i] = temp_mask
-        # return museformer_mask
 
     def _kl_divergence(self):
         KLD = 0
