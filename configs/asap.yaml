@@ -1,6 +1,6 @@
 name: asap
 generic:
-  seed: 1299
+  seed: 1410
   log_dir: './log/'
   clear_log: True
 data:
@@ -20,21 +20,23 @@ training:
   pretrain: False
   epochs: 500000
   save: True
-  save_every: 8
+  save_every: 4
   save_dir: "./saved_models/"
   load: True
   decode: True
   decode_every: 4
   decode_dir: "./decoded/"
 eval:
-  load_path: "./past_checkpoints/museformer-full-model-0-48hr/96-120/model_epoch_128.pt"
+  load_path: "./past_checkpoints/museformer-full-model-0-48hr/120-168/model_epoch_128.pt"
+  # load_path: "./past_checkpoints/museformer-full-model-0-48hr/120-168/model_epoch_120.pt"
+
 transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   embedding_sizes: [1028, 132, 5, 132, 132, 37, 258, 53]  # TODO remove instrument, since all piano
   d_model: 512
   n_head: 8
   max_len: 8500
   ffn_hidden: 2048  # 2048
-  drop_prob: 0.45
+  drop_prob: 0.48
   n_layers: 6 # 6
-  lr: 1e-5
+  lr: 4e-5
   bayes_compression: True

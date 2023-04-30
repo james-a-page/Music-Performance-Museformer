@@ -69,7 +69,7 @@ def revert_example(example):
     return out
 
 
-def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device):
+def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, device, save_src=False):
     """
     Decode single example from test dataloader greedily
     """
@@ -103,13 +103,14 @@ def greedy_decode(file_path, model, test_loader, PAD_IDX, SOS_IDX, EOS_IDX, devi
             tgt_input = torch.concatenate((tgt_input, decoded_example), dim=1)
 
     # Dump to midi
-    src = revert_example(src.tolist()[0])
-    midi = encoding_to_MIDI(src)
-    midi.dump("{}_src.mid".format(file_path))
+    if save_src:
+        src = revert_example(src.tolist()[0])
+        midi = encoding_to_MIDI(src)
+        midi.dump("{}_src.mid".format(file_path))
 
-    tgt = revert_example(tgt.tolist()[0])
-    midi = encoding_to_MIDI(tgt)
-    midi.dump("{}_tgt.mid".format(file_path))
+        tgt = revert_example(tgt.tolist()[0])
+        midi = encoding_to_MIDI(tgt)
+        midi.dump("{}_tgt.mid".format(file_path))
     
     decoded_tokens_list = tgt_input.detach().tolist()[0]
     decoded_tokens_list_rev = revert_example(decoded_tokens_list)
