@@ -10,8 +10,6 @@ from models.model.decoder import Decoder
 from models.model.encoder import Encoder
 from models.embedding.octuple_embedding import OctupleEmbedding
 
-import torchshow as ts
-
 from models.mask_utils import get_bar_locations
 
 
@@ -66,8 +64,6 @@ class Transformer(nn.Module):
         if self.attention_method == "museformer":
             trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                     self.make_museformer_mask(tgt_pad_mask, tgt_pad_mask, tgt_bar_positions)
-            ts.show(trg_mask)
-            raise SyntaxError("")
         else:
             trg_mask = self.make_pad_mask(tgt_pad_mask, tgt_pad_mask) * \
                     self.make_no_peak_mask(tgt_pad_mask, tgt_pad_mask)
