@@ -5,8 +5,28 @@ We pre-train the decoder block of our model on the large [Giant-Midi dataset](ht
 
 We make use of the Octuple tokenisation method, and use the [Museformer](https://github.com/microsoft/muzic/tree/main/museformer) attention scheme to reduce memory requirements and improve the quality of the pieces we generate.
 
+### Setup
+
+#### Data
+The ASAP dataset can be acquired by running the ```download.sh``` file seen in this dataset. For pretraining however, you will need to download the [Giant-Midi Dataset](https://github.com/bytedance/GiantMIDI-Piano/blob/master/disclaimer.md) and create a metadata file containing the list of file paths by:
+```cmd
+find * > test.csv
+sed -i -e '1imidi_filename' test.csv
+```
+
+Any other dataset can be setup to work with this project, changes to the data paths can be made in the configs file.
+
+
+#### Requirements
+Install the required packages from the requirements file and ensure you have a CUDA compatible environment set-up.
+
+```cmd
+pip install -r requirements.txt
+```
+
 
 ### Usage
+
 The training loop of the model can be run by the ```./train/train.py``` with the configs file as argument:
 ```cmd
 python ./train/train.py ./configs/asap.yaml
