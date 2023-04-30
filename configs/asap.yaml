@@ -27,8 +27,7 @@ training:
   decode_every: 4
   decode_dir: "./decoded/"
 eval:
-  load_path: "./past_checkpoints/museformer-full-model-0-48hr/120-168/model_epoch_128.pt"
-  # load_path: "./past_checkpoints/museformer-full-model-0-48hr/120-168/model_epoch_120.pt"
+  load_path: "./saved_models/model_epoch_72.pt"
 
 transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   embedding_sizes: [1028, 132, 5, 132, 132, 37, 258, 53]  # TODO remove instrument, since all piano
@@ -36,7 +35,7 @@ transformer:  # [1027, 130, 3, 131, 131, 36, 257, 52]
   n_head: 8
   max_len: 8500
   ffn_hidden: 2048  # 2048
-  drop_prob: 0.48
+  drop_prob: 0.45
   n_layers: 6 # 6
-  lr: 4e-5
+  lr: 2e-5
   bayes_compression: True

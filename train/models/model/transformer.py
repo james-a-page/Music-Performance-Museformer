@@ -106,7 +106,7 @@ class Transformer(nn.Module):
     """
     Generate the mask for the seqeuence based on https://arxiv.org/pdf/2210.10349.pdf
 
-    General masking scheme example where the 1st bar (x1-3) is a structure related bar for bar 3 (x6-8)
+    General masking scheme example where the previous bar is the structure related bar.
 
         | b1 x1 x2 x3 b2 x4 x5 b3 x6 x7 x8 b4
     Main mask
@@ -114,9 +114,9 @@ class Transformer(nn.Module):
     x1  |    #
     x2  |    #  #
     x3  |    #  #  #
+    b2  |    #  #  #  #
     x4  |    #  #  #     #
     x5  |    #  #  #     #  #
-    b2  |    #  #  #  #
     b3  |                #  #  #
     x6  |             #  #  #     #
     x7  |             #  #  #     #  #
@@ -131,7 +131,7 @@ class Transformer(nn.Module):
         q,
         k,
         summary_positon,
-        struct_related_bars=[1, 2, 4, 8],
+        struct_related_bars=[1, 2, 4, 8, 12, 16, 24, 32],
         use_eos_as_summary=False,
         EOS_idx=3,
     ):

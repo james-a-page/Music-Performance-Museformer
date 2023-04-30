@@ -25,11 +25,12 @@ class OctupleEmbedding(nn.Module):
         """
         super(OctupleEmbedding, self).__init__()
 
+        d_embed = int(d_model / 8)
+        
         program_d_embed = 4
         pitch_d_embed = ((3 * d_embed) - program_d_embed) // 2
         dur_d_embed = ((3 * d_embed) - program_d_embed) - pitch_d_embed
 
-        d_embed = int(d_model / 8)
         self.tok_emb0 = TokenEmbedding(embedding_sizes[0], program_d_embed, PAD_IDX=PAD_IDX)
         self.tok_emb1 = TokenEmbedding(embedding_sizes[1], d_embed, PAD_IDX=PAD_IDX)
         self.tok_emb2 = TokenEmbedding(embedding_sizes[2], d_embed, PAD_IDX=PAD_IDX)
